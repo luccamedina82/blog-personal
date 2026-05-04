@@ -39,7 +39,7 @@ export function SessionDetail({
 }: SessionDetailProps) {
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [quality, setQuality] = useState(session.quality)
-  const [categoryId, setCategoryId] = useState<string>(session.category_id ?? '')
+  const [categoryId, setCategoryId] = useState<string>(session.category_id ?? '__none__')
   const [currentTime, setCurrentTime] = useState(0)
 
   useEffect(() => {
@@ -56,7 +56,7 @@ export function SessionDetail({
   }
 
   async function handleCategoryChange(val: string) {
-    const newCatId = val || null
+    const newCatId = val === '__none__' ? null : val
     setCategoryId(val)
     await updateShadowingSession(session.id, { category_id: newCatId })
     onCategoryChange(session.id, newCatId)
@@ -130,7 +130,7 @@ export function SessionDetail({
               <SelectValue placeholder="Uncategorized" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Uncategorized</SelectItem>
+              <SelectItem value="__none__">Uncategorized</SelectItem>
               {categories.map((cat) => (
                 <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
               ))}

@@ -33,7 +33,7 @@ export function SessionUpload({ categories, initialCategoryId, onCreated, onCanc
   const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [title, setTitle] = useState('')
-  const [categoryId, setCategoryId] = useState<string>(initialCategoryId ?? '')
+  const [categoryId, setCategoryId] = useState<string>(initialCategoryId ?? '__none__')
   const [uploading, setUploading] = useState(false)
 
   function handleFile(f: File) {
@@ -56,7 +56,7 @@ export function SessionUpload({ categories, initialCategoryId, onCreated, onCanc
         storage_path: storagePath,
         kind,
         duration_seconds: duration || null,
-        category_id: categoryId || null,
+        category_id: categoryId === '__none__' ? null : categoryId,
       })
       toast.success('Session uploaded')
       onCreated(session)
@@ -120,7 +120,7 @@ export function SessionUpload({ categories, initialCategoryId, onCreated, onCanc
               <SelectValue placeholder="Uncategorized" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Uncategorized</SelectItem>
+              <SelectItem value="__none__">Uncategorized</SelectItem>
               {categories.map((cat) => (
                 <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
               ))}
