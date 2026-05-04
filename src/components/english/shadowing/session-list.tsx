@@ -1,4 +1,4 @@
-import { Upload, Trash2 } from 'lucide-react'
+import { ArrowLeft, Upload, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import {
@@ -9,7 +9,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { deleteShadowingSessionFull } from '@/lib/english/queries'
-import type { ShadowingSession } from '@/lib/english/types'
+import type { ShadowingCategory, ShadowingSession } from '@/lib/english/types'
 
 const QUALITY_BADGE: Record<NonNullable<ShadowingSession['quality']>, string> = {
   mastered: 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20',
@@ -40,15 +40,28 @@ function fmtDuration(s: number) {
 
 interface SessionListProps {
   sessions: ShadowingSession[]
+  categories: ShadowingCategory[]
+  categoryName?: string
   onSelect: (id: string) => void
   onUpload: () => void
+  onBack?: () => void
   onDeleted: (id: string) => void
 }
 
-export function SessionList({ sessions, onSelect, onUpload, onDeleted }: SessionListProps) {
+export function SessionList({
+  sessions,
+  categories,
+  categoryName,
+  onSelect,
+  onUpload,
+  onBack,
+  onDeleted,
+}: SessionListProps) {
   const totalSeconds = sessions.reduce((sum, s) => sum + (s.duration_seconds ?? 0), 0)
   const hours = Math.round((totalSeconds / 3600) * 10) / 10
   const streak = calcStreak(sessions)
+
+  const catMap = Object.fromEntries(categories.map((c) => [c.id, c.name]))
 
   async function handleDelete(session: ShadowingSession) {
     try {
@@ -62,11 +75,21 @@ export function SessionList({ sessions, onSelect, onUpload, onDeleted }: Session
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="size-3.5" />
+          All categories
+        </button>
+      )}
+
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground mb-1">Audio</p>
-          <h2 className="text-xl font-medium tracking-tight">Shadowing Studio</h2>
+          <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground mb-1">Shadowing</p>
+          <h2 className="text-xl font-medium tracking-tight">{categoryName ?? 'All sessions'}</h2>
         </div>
         <Button size="sm" className="gap-1.5 shrink-0" onClick={onUpload}>
           <Upload className="size-3.5" />
@@ -88,7 +111,6 @@ export function SessionList({ sessions, onSelect, onUpload, onDeleted }: Session
         ))}
       </div>
 
-      {/* Session list */}
       {sessions.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
           <p className="text-sm text-muted-foreground">No sessions yet.</p>
@@ -114,11 +136,12 @@ export function SessionList({ sessions, onSelect, onUpload, onDeleted }: Session
                     {new Date(session.created_at).toLocaleDateString('en-US', {
                       month: 'short', day: 'numeric', year: '2-digit',
                     })}
-                    {session.duration_seconds
-                      ? ` · ${fmtDuration(session.duration_seconds)}`
-                      : ''}
+                    {session.duration_seconds ? ` · ${fmtDuration(session.duration_seconds)}` : ''}
                     {' · '}
                     {session.kind}
+                    {!categoryName && session.category_id && catMap[session.category_id]
+                      ? ` · ${catMap[session.category_id]}`
+                      : ''}
                   </p>
                 </button>
 

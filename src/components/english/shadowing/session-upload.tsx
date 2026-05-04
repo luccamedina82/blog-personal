@@ -4,10 +4,15 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
 import { uploadShadowingFile, createShadowingSession } from '@/lib/english/queries'
-import type { ShadowingSession } from '@/lib/english/types'
+import type { ShadowingCategory, ShadowingSession } from '@/lib/english/types'
 
 interface SessionUploadProps {
+  categories: ShadowingCategory[]
+  initialCategoryId?: string | null
   onCreated: (session: ShadowingSession) => void
   onCancel: () => void
 }
@@ -15,20 +20,20 @@ interface SessionUploadProps {
 function getDuration(file: File): Promise<number> {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file)
-    const el = file.type.startsWith('video/') ? document.createElement('video') : document.createElement('audio')
+    const el = file.type.startsWith('video/')
+      ? document.createElement('video')
+      : document.createElement('audio')
     el.src = url
-    el.onloadedmetadata = () => {
-      URL.revokeObjectURL(url)
-      resolve(isFinite(el.duration) ? el.duration : 0)
-    }
+    el.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(isFinite(el.duration) ? el.duration : 0) }
     el.onerror = () => { URL.revokeObjectURL(url); resolve(0) }
   })
 }
 
-export function SessionUpload({ onCreated, onCancel }: SessionUploadProps) {
+export function SessionUpload({ categories, initialCategoryId, onCreated, onCancel }: SessionUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [title, setTitle] = useState('')
+  const [categoryId, setCategoryId] = useState<string>(initialCategoryId ?? '')
   const [uploading, setUploading] = useState(false)
 
   function handleFile(f: File) {
@@ -51,6 +56,7 @@ export function SessionUpload({ onCreated, onCancel }: SessionUploadProps) {
         storage_path: storagePath,
         kind,
         duration_seconds: duration || null,
+        category_id: categoryId || null,
       })
       toast.success('Session uploaded')
       onCreated(session)
@@ -69,7 +75,6 @@ export function SessionUpload({ onCreated, onCancel }: SessionUploadProps) {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Drop zone */}
         <div
           onClick={() => inputRef.current?.click()}
           onDragOver={(e) => e.preventDefault()}
@@ -80,9 +85,7 @@ export function SessionUpload({ onCreated, onCancel }: SessionUploadProps) {
             <>
               <FileAudio className="size-8 text-primary" />
               <p className="text-sm font-medium text-foreground">{file.name}</p>
-              <p className="text-xs text-muted-foreground">
-                {(file.size / 1024 / 1024).toFixed(1)} MB
-              </p>
+              <p className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(1)} MB</p>
             </>
           ) : (
             <>
@@ -108,6 +111,21 @@ export function SessionUpload({ onCreated, onCancel }: SessionUploadProps) {
             onChange={(e) => setTitle(e.target.value)}
             placeholder="e.g. BBC 6 Minute English — Apr 22"
           />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Category <span className="text-muted-foreground font-normal">(optional)</span></Label>
+          <Select value={categoryId} onValueChange={setCategoryId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Uncategorized" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Uncategorized</SelectItem>
+              {categories.map((cat) => (
+                <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex gap-2 justify-end">

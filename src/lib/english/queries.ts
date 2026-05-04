@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import type { Deck, Card, VocabEntry, EvaluatorRun, ShadowingSession, Book, BookAnnotation } from './types'
+import type { Deck, Card, VocabEntry, EvaluatorRun, ShadowingSession, ShadowingCategory, Book, BookAnnotation } from './types'
 
 async function getUid(): Promise<string> {
   const { data } = await supabase.auth.getSession()
@@ -160,12 +160,49 @@ export async function listShadowingSessions(): Promise<ShadowingSession[]> {
 }
 
 export async function createShadowingSession(
-  payload: Pick<ShadowingSession, 'title' | 'storage_path' | 'kind' | 'duration_seconds'>,
+  payload: Pick<ShadowingSession, 'title' | 'storage_path' | 'kind' | 'duration_seconds'> & { category_id?: string | null },
 ): Promise<ShadowingSession> {
   const user_id = await getUid()
   const { data, error } = await supabase.from('shadowing_sessions').insert({ ...payload, user_id }).select().single()
   if (error) throw error
   return data
+}
+
+// ── Shadowing Categories ───────────────────────────────────────────────────
+
+export async function listShadowingCategories(): Promise<ShadowingCategory[]> {
+  const { data, error } = await supabase
+    .from('shadowing_categories')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function createShadowingCategory(
+  payload: Pick<ShadowingCategory, 'name' | 'description'>,
+): Promise<ShadowingCategory> {
+  const user_id = await getUid()
+  const { data, error } = await supabase
+    .from('shadowing_categories')
+    .insert({ ...payload, user_id })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateShadowingCategory(
+  id: string,
+  payload: Partial<Pick<ShadowingCategory, 'name' | 'description'>>,
+): Promise<void> {
+  const { error } = await supabase.from('shadowing_categories').update(payload).eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteShadowingCategory(id: string): Promise<void> {
+  const { error } = await supabase.from('shadowing_categories').delete().eq('id', id)
+  if (error) throw error
 }
 
 export async function updateShadowingSession(id: string, payload: Partial<ShadowingSession>): Promise<void> {

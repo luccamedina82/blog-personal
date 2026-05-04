@@ -44,6 +44,14 @@ export type EvaluatorRun = {
   created_at: string
 }
 
+export type ShadowingCategory = {
+  id: string
+  user_id: string
+  name: string
+  description: string | null
+  created_at: string
+}
+
 export type ShadowingSession = {
   id: string
   user_id: string
@@ -54,6 +62,7 @@ export type ShadowingSession = {
   transcript: Array<{ start: number; end: number; text: string }>
   notes: string
   quality: 'mastered' | 'review' | 'needs-work' | null
+  category_id: string | null
   created_at: string
 }
 
