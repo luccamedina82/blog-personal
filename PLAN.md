@@ -382,7 +382,7 @@ export type DailyTip = {
 - [x] Crear `EnglishShell` con tab nav (header + 5 tabs) (2026-05-03)
 - [x] Contenido migrado desde `english-section.tsx` a rutas individuales (2026-05-03)
 - [ ] Eliminar `english-section.tsx` viejo (pendiente — no causa errores)
-- [ ] Migrar BOOKS hardcoded actuales a tabla `books` (seed manual desde SQL editor o UI)
+- [x] Migrar BOOKS hardcoded actuales a tabla `books` — books.tsx reescrito con Supabase (2026-05-04)
 
 **Salida:** podés navegar `/english/anki`, `/english/vocab`, etc. con shell + placeholder. Queries layer listo.
 
@@ -441,7 +441,8 @@ export type DailyTip = {
   - [x] Filtra cards `due <= now()` en SQL (`listDueCards`)
 - [x] `SaveToAnkiButton` — componente standalone reutilizable con deck selector (2026-05-04)
 - [x] Conectar con vocab: botón "→ Anki" por fila en `VocabTable` (2026-05-04)
-- [ ] Conectar con evaluator y books (botón → Anki) *(deferido Fase 6)*
+- [x] Conectar con books (botón → Anki en quotes de BookDetail) (2026-05-04)
+- [ ] Conectar con evaluator (botón → Anki) *(deferido — evaluator usa mock heurístico)*
 
 **TECH DEBT marcada:** Anki import/export `.apkg` real → ver sección 7.
 
@@ -451,18 +452,26 @@ export type DailyTip = {
 
 ### Fase 5 — Shadowing Studio (2 días)
 
-- [ ] `SessionList`: query `shadowing_sessions order by created_at desc`
-- [ ] Upload audio/video → `supabase.storage.from('media').upload(\`${userId}/shadowing/${id}.mp3\`, blob)`
-- [ ] Crear row en `shadowing_sessions` con `storage_path`
-- [ ] `SessionRecorder`: file picker (futuro: grabar con `MediaRecorder` API)
-- [ ] Por sesión:
-  - [ ] Resolver URL: `supabase.storage.from('media').createSignedUrl(path, 3600)`
-  - [ ] Reusar `WaveformPlayer` actual (extender para video)
-  - [ ] `TranscriptPane`: editor sincronizado con timestamps; persiste como `jsonb` en `transcript`
-  - [ ] `NotesPane`: textarea con autosave debounced
-  - [ ] Tag de calidad: mastered / review / needs-work (update column `quality`)
-- [ ] Stats reales: count, streak (group by date), sum duration
-- [ ] Eliminar sesión: borrar storage + row (transaction-ish: storage primero, después row)
+- [x] `SessionList`: query `shadowing_sessions order by created_at desc` (2026-05-04)
+- [x] Upload audio/video → `supabase.storage.from('media').upload(...)` con drag-and-drop (2026-05-04)
+- [x] Crear row en `shadowing_sessions` con `storage_path` + duración auto-detectada (2026-05-04)
+- [x] `SessionUpload`: file picker con drag-and-drop (2026-05-04)
+- [x] Por sesión: (2026-05-04)
+  - [x] Resolver URL: `supabase.storage.from('media').createSignedUrl(path, 3600)`
+  - [x] `WaveformPlayer` con HTML5 Audio real (audioUrl prop, simulated mode preservado)
+  - [x] `TranscriptPane`: líneas `{start, text}` editables, autosave debounced, highlight activa
+  - [x] `NotesPane`: textarea con autosave debounced 600ms + indicador "Saved ✓"
+  - [x] Tag de calidad: mastered / review / needs-work
+- [x] Stats reales: count, streak (group by date), sum duration (2026-05-04)
+- [x] Eliminar sesión: storage primero → DB row (2026-05-04)
+- [x] **Categorías de sesiones** (2026-05-04)
+  - [x] Migración SQL: tabla `shadowing_categories` + FK `category_id` en `shadowing_sessions` (2026-05-04)
+  - [x] CRUD categorías (crear, renombrar, eliminar — sessions quedan sin categoría al borrar) (2026-05-04)
+  - [x] `CategoryGrid` view como pantalla principal de shadowing (2026-05-04)
+  - [x] `SessionList` filtrada por categoría + breadcrumb back (2026-05-04)
+  - [x] Asignar categoría en upload + en session-detail (2026-05-04)
+  - [x] Queries: `listShadowingCategories`, `createShadowingCategory`, `updateShadowingCategory`, `deleteShadowingCategory` (2026-05-04)
+  - [x] Types: `ShadowingCategory` + `category_id` en `ShadowingSession` (2026-05-04)
 
 **Salida:** subís audios al cloud, los reproducís con signed URL, anotás transcripción y notas.
 
@@ -470,12 +479,13 @@ export type DailyTip = {
 
 ### Fase 6 — Books Detail + Cross-Links (1 día)
 
-- [ ] `BookDetail` route: clicar libro abre vista expandida (lee `book_annotations`)
-- [ ] Reusar `DevLabPostEditor` para anotar libros (highlights, quotes, mis notas)
-- [ ] CRUD anotaciones vía queries
-- [ ] Botón "→ Anki" en cada quote (`queries.createCard` en mazo "Book Quotes")
-- [ ] Búsqueda global con `cmdk` (`⌘K`): atraviesa decks/cards/vocab/posts/sesiones (queries paralelas)
-- [ ] Atajos teclado: `g e a` → /english/anki, `c c` → create card, etc.
+- [x] `BookDetail` view: clicar libro abre vista expandida (lee `book_annotations`) (2026-05-04)
+- [x] Books CRUD completo: BookForm (create/edit), grid con hover edit/delete (2026-05-04)
+- [x] `AnnotationForm`: kind (quote/note/highlight) + content + page opcional (2026-05-04)
+- [x] CRUD anotaciones vía queries (`createBookAnnotation`, `deleteBookAnnotation`) (2026-05-04)
+- [x] Botón "→ Anki" en cada quote (`SaveToAnkiButton`, source_kind=book) (2026-05-04)
+- [x] Búsqueda global con `cmdk` (`⌘K`): decks / vocab / books / sessions en paralelo, filter client-side (2026-05-04)
+- [ ] Atajos teclado: `g e a` → /english/anki, `c c` → create card, etc. *(deferred — nice-to-have)*
 
 **Salida:** lectura + anotaciones unificadas, búsqueda global cross-DB.
 
@@ -608,7 +618,7 @@ VITE_SUPABASE_ANON_KEY
 ---
 
 **Última actualización:** 2026-05-04
-**Estado:** Fase 4 COMPLETA. Anki Lab online — DeckGrid, DeckView, StudyMode + SM-2, SaveToAnkiButton en Vocab. Siguiente: seed decks/vocab + Fase 5 (Shadowing Studio).
+**Estado:** Fases 0–6 COMPLETAS. Módulo English online: Anki Lab (SM-2 SRS), Vocab CRUD, Evaluator con historial, Shadowing Studio con categorías, Books con anotaciones + → Anki, búsqueda global ⌘K. Siguiente: seed datos iniciales + decidir Fase 7 (IA real, pago).
 
 
 
