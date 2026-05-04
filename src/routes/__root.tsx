@@ -4,6 +4,7 @@ import { AppSidebar, MobileNav } from '@/components/app-sidebar'
 import { supabase } from '@/lib/supabase'
 import { Toaster } from '@/components/ui/sonner'
 import { GlobalSearch } from '@/components/global-search'
+import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts'
 
 const PUBLIC_PATHS = ['/login', '/auth/callback']
 
@@ -22,6 +23,7 @@ function RootComponent() {
   'use no memo'
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p))
+  useGlobalShortcuts()
 
   if (isPublic) {
     return (
