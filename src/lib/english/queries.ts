@@ -311,3 +311,8 @@ export async function createBookAnnotation(
   if (error) throw error
   return data
 }
+
+export async function deleteBookAnnotation(id: string): Promise<void> {
+  const { error } = await supabase.from('book_annotations').delete().eq('id', id)
+  if (error) throw error
+}

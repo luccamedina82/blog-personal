@@ -3,6 +3,7 @@ import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { AppSidebar, MobileNav } from '@/components/app-sidebar'
 import { supabase } from '@/lib/supabase'
 import { Toaster } from '@/components/ui/sonner'
+import { GlobalSearch } from '@/components/global-search'
 
 const PUBLIC_PATHS = ['/login', '/auth/callback']
 
@@ -38,6 +39,7 @@ function RootComponent() {
         <MobileNav />
         <Outlet />
       </div>
+      <GlobalSearch />
       <TanStackRouterDevtools />
       <Toaster />
     </main>
