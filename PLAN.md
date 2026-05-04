@@ -416,7 +416,7 @@ export type DailyTip = {
   - [x] `DAILY_TIPS` array curado 30 entries en mock (no en DB)
   - [x] `TipOfDay` rota por `new Date().getDate() % len`
   - [ ] Botón "guardar como card Anki" → `queries.createCard` *(deferido a Fase 4 — requiere deck_id)*
-- [ ] **Seed sugerido:** correr en SQL Editor de Supabase con tu `user_id` para popular vocab_entries inicial
+- [x] **Seed:** `supabase/seed.sql` — 5 decks + 26 vocab entries (words/phrases/connectors). Correr en SQL Editor de Supabase (auto-detecta user_id). (2026-05-04)
 
 **Salida:** vocab CRUD funcional online + tip diario rotativo. Build limpio.
 
@@ -485,7 +485,7 @@ export type DailyTip = {
 - [x] CRUD anotaciones vía queries (`createBookAnnotation`, `deleteBookAnnotation`) (2026-05-04)
 - [x] Botón "→ Anki" en cada quote (`SaveToAnkiButton`, source_kind=book) (2026-05-04)
 - [x] Búsqueda global con `cmdk` (`⌘K`): decks / vocab / books / sessions en paralelo, filter client-side (2026-05-04)
-- [ ] Atajos teclado: `g e a` → /english/anki, `c c` → create card, etc. *(deferred — nice-to-have)*
+- [x] Atajos teclado: `g a` → /english/anki, `g v` → /english/vocab, `g e` → /english/evaluator, `g s` → /english/shadowing, `g b` → /english/books (2026-05-04)
 
 **Salida:** lectura + anotaciones unificadas, búsqueda global cross-DB.
 
@@ -618,7 +618,7 @@ VITE_SUPABASE_ANON_KEY
 ---
 
 **Última actualización:** 2026-05-04
-**Estado:** Fases 0–6 COMPLETAS. Módulo English online: Anki Lab (SM-2 SRS), Vocab CRUD, Evaluator con historial, Shadowing Studio con categorías, Books con anotaciones + → Anki, búsqueda global ⌘K. Siguiente: seed datos iniciales + decidir Fase 7 (IA real, pago).
+**Estado:** Fases 0–6 COMPLETAS + keyboard shortcuts + seed SQL. Módulo English online: Anki Lab (SM-2 SRS), Vocab CRUD, Evaluator con historial, Shadowing Studio con categorías, Books con anotaciones + → Anki, búsqueda global ⌘K, atajos `g+letra`. Siguiente: decidir Fase 7 (IA real, pago).
 
 
 
