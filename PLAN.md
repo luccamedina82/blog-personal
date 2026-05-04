@@ -357,11 +357,11 @@ export type DailyTip = {
 - [x] Self-signup con tu email (`luccamedina03@gmail.com`) — trigger fix confirmado (2026-05-03)
 - [x] Crear bucket `media` en Supabase Storage (privado) (2026-05-03)
 - [x] Política bucket: usuarios solo leen/escriben en `${user.id}/*` (2026-05-03)
-- [ ] Conectar repo a Vercel (importar proyecto)
-- [ ] Setear env vars en Vercel: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
-- [ ] Agregar URL de Vercel a redirect URLs en Supabase: `https://<vercel-url>/auth/callback`
-- [ ] Deploy preview funcionando
-- [ ] Verificar login funciona en producción
+- [x] Conectar repo a Vercel (importar proyecto) (2026-05-03)
+- [x] Setear env vars en Vercel: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (2026-05-03)
+- [x] Agregar URL de Vercel a redirect URLs en Supabase (2026-05-03)
+- [x] Deploy preview funcionando (2026-05-03)
+- [x] Verificar login funciona en producción (2026-05-03)
 
 **Salida:** app online en Vercel, login con magic link funcionando, DB lista, bucket listo.
 
@@ -602,4 +602,4 @@ VITE_SUPABASE_ANON_KEY
 ---
 
 **Última actualización:** 2026-05-03
-**Estado:** Fase 0 ~85% — código y DB listos. Pendiente: confirmar signup, bucket media, Vercel deploy.
+**Estado:** Fase 0 COMPLETA. App en producción, auth funcionando. Siguiente: Fase 1.

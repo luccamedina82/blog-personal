@@ -14,6 +14,12 @@ import { Route as EnglishRouteImport } from './routes/english'
 import { Route as DevlabRouteImport } from './routes/devlab'
 import { Route as BitacoraRouteImport } from './routes/bitacora'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as EnglishIndexRouteImport } from './routes/english/index'
+import { Route as EnglishVocabRouteImport } from './routes/english/vocab'
+import { Route as EnglishShadowingRouteImport } from './routes/english/shadowing'
+import { Route as EnglishEvaluatorRouteImport } from './routes/english/evaluator'
+import { Route as EnglishBooksRouteImport } from './routes/english/books'
+import { Route as EnglishAnkiRouteImport } from './routes/english/anki'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 
 const LoginRoute = LoginRouteImport.update({
@@ -41,6 +47,36 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EnglishIndexRoute = EnglishIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => EnglishRoute,
+} as any)
+const EnglishVocabRoute = EnglishVocabRouteImport.update({
+  id: '/vocab',
+  path: '/vocab',
+  getParentRoute: () => EnglishRoute,
+} as any)
+const EnglishShadowingRoute = EnglishShadowingRouteImport.update({
+  id: '/shadowing',
+  path: '/shadowing',
+  getParentRoute: () => EnglishRoute,
+} as any)
+const EnglishEvaluatorRoute = EnglishEvaluatorRouteImport.update({
+  id: '/evaluator',
+  path: '/evaluator',
+  getParentRoute: () => EnglishRoute,
+} as any)
+const EnglishBooksRoute = EnglishBooksRouteImport.update({
+  id: '/books',
+  path: '/books',
+  getParentRoute: () => EnglishRoute,
+} as any)
+const EnglishAnkiRoute = EnglishAnkiRouteImport.update({
+  id: '/anki',
+  path: '/anki',
+  getParentRoute: () => EnglishRoute,
+} as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
   path: '/auth/callback',
@@ -51,26 +87,43 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/bitacora': typeof BitacoraRoute
   '/devlab': typeof DevlabRoute
-  '/english': typeof EnglishRoute
+  '/english': typeof EnglishRouteWithChildren
   '/login': typeof LoginRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/english/anki': typeof EnglishAnkiRoute
+  '/english/books': typeof EnglishBooksRoute
+  '/english/evaluator': typeof EnglishEvaluatorRoute
+  '/english/shadowing': typeof EnglishShadowingRoute
+  '/english/vocab': typeof EnglishVocabRoute
+  '/english/': typeof EnglishIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/bitacora': typeof BitacoraRoute
   '/devlab': typeof DevlabRoute
-  '/english': typeof EnglishRoute
   '/login': typeof LoginRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/english/anki': typeof EnglishAnkiRoute
+  '/english/books': typeof EnglishBooksRoute
+  '/english/evaluator': typeof EnglishEvaluatorRoute
+  '/english/shadowing': typeof EnglishShadowingRoute
+  '/english/vocab': typeof EnglishVocabRoute
+  '/english': typeof EnglishIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/bitacora': typeof BitacoraRoute
   '/devlab': typeof DevlabRoute
-  '/english': typeof EnglishRoute
+  '/english': typeof EnglishRouteWithChildren
   '/login': typeof LoginRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/english/anki': typeof EnglishAnkiRoute
+  '/english/books': typeof EnglishBooksRoute
+  '/english/evaluator': typeof EnglishEvaluatorRoute
+  '/english/shadowing': typeof EnglishShadowingRoute
+  '/english/vocab': typeof EnglishVocabRoute
+  '/english/': typeof EnglishIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -81,8 +134,25 @@ export interface FileRouteTypes {
     | '/english'
     | '/login'
     | '/auth/callback'
+    | '/english/anki'
+    | '/english/books'
+    | '/english/evaluator'
+    | '/english/shadowing'
+    | '/english/vocab'
+    | '/english/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/bitacora' | '/devlab' | '/english' | '/login' | '/auth/callback'
+  to:
+    | '/'
+    | '/bitacora'
+    | '/devlab'
+    | '/login'
+    | '/auth/callback'
+    | '/english/anki'
+    | '/english/books'
+    | '/english/evaluator'
+    | '/english/shadowing'
+    | '/english/vocab'
+    | '/english'
   id:
     | '__root__'
     | '/'
@@ -91,13 +161,19 @@ export interface FileRouteTypes {
     | '/english'
     | '/login'
     | '/auth/callback'
+    | '/english/anki'
+    | '/english/books'
+    | '/english/evaluator'
+    | '/english/shadowing'
+    | '/english/vocab'
+    | '/english/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BitacoraRoute: typeof BitacoraRoute
   DevlabRoute: typeof DevlabRoute
-  EnglishRoute: typeof EnglishRoute
+  EnglishRoute: typeof EnglishRouteWithChildren
   LoginRoute: typeof LoginRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
 }
@@ -139,6 +215,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/english/': {
+      id: '/english/'
+      path: '/'
+      fullPath: '/english/'
+      preLoaderRoute: typeof EnglishIndexRouteImport
+      parentRoute: typeof EnglishRoute
+    }
+    '/english/vocab': {
+      id: '/english/vocab'
+      path: '/vocab'
+      fullPath: '/english/vocab'
+      preLoaderRoute: typeof EnglishVocabRouteImport
+      parentRoute: typeof EnglishRoute
+    }
+    '/english/shadowing': {
+      id: '/english/shadowing'
+      path: '/shadowing'
+      fullPath: '/english/shadowing'
+      preLoaderRoute: typeof EnglishShadowingRouteImport
+      parentRoute: typeof EnglishRoute
+    }
+    '/english/evaluator': {
+      id: '/english/evaluator'
+      path: '/evaluator'
+      fullPath: '/english/evaluator'
+      preLoaderRoute: typeof EnglishEvaluatorRouteImport
+      parentRoute: typeof EnglishRoute
+    }
+    '/english/books': {
+      id: '/english/books'
+      path: '/books'
+      fullPath: '/english/books'
+      preLoaderRoute: typeof EnglishBooksRouteImport
+      parentRoute: typeof EnglishRoute
+    }
+    '/english/anki': {
+      id: '/english/anki'
+      path: '/anki'
+      fullPath: '/english/anki'
+      preLoaderRoute: typeof EnglishAnkiRouteImport
+      parentRoute: typeof EnglishRoute
+    }
     '/auth/callback': {
       id: '/auth/callback'
       path: '/auth/callback'
@@ -149,11 +267,32 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface EnglishRouteChildren {
+  EnglishAnkiRoute: typeof EnglishAnkiRoute
+  EnglishBooksRoute: typeof EnglishBooksRoute
+  EnglishEvaluatorRoute: typeof EnglishEvaluatorRoute
+  EnglishShadowingRoute: typeof EnglishShadowingRoute
+  EnglishVocabRoute: typeof EnglishVocabRoute
+  EnglishIndexRoute: typeof EnglishIndexRoute
+}
+
+const EnglishRouteChildren: EnglishRouteChildren = {
+  EnglishAnkiRoute: EnglishAnkiRoute,
+  EnglishBooksRoute: EnglishBooksRoute,
+  EnglishEvaluatorRoute: EnglishEvaluatorRoute,
+  EnglishShadowingRoute: EnglishShadowingRoute,
+  EnglishVocabRoute: EnglishVocabRoute,
+  EnglishIndexRoute: EnglishIndexRoute,
+}
+
+const EnglishRouteWithChildren =
+  EnglishRoute._addFileChildren(EnglishRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BitacoraRoute: BitacoraRoute,
   DevlabRoute: DevlabRoute,
-  EnglishRoute: EnglishRoute,
+  EnglishRoute: EnglishRouteWithChildren,
   LoginRoute: LoginRoute,
   AuthCallbackRoute: AuthCallbackRoute,
 }

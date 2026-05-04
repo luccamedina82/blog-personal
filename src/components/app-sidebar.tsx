@@ -38,7 +38,7 @@ export function AppSidebar() {
         </p>
         <ul className="flex flex-col gap-1">
           {NAV.map((item) => {
-            const isActive = pathname === item.to
+            const isActive = pathname === item.to || (item.to !== '/' && pathname.startsWith(item.to))
             const Icon = item.icon
             return (
               <li key={item.id}>
@@ -113,7 +113,7 @@ export function MobileNav() {
     <nav className="lg:hidden sticky top-0 z-40 backdrop-blur-md bg-background/80 border-b border-border">
       <div className="flex items-center gap-1 overflow-x-auto px-3 py-2">
         {NAV.map((item) => {
-          const isActive = pathname === item.to
+          const isActive = pathname === item.to || (item.to !== '/' && pathname.startsWith(item.to))
           const Icon = item.icon
           return (
             <Link
