@@ -2,7 +2,7 @@ import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { InteractiveCodeBlock } from "@/components/interactive-code-block"
-import { DevLabPostEditor, type DraftPost, type DraftBlock } from "@/components/devlab-post-editor"
+import { DevLabPostEditor, type DraftPost } from "@/components/devlab-post-editor"
 import {
   ArrowLeft,
   Clock,

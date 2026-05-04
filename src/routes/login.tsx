@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
@@ -11,7 +11,6 @@ export const Route = createFileRoute('/login')({
 
 function LoginPage() {
   'use no memo'
-  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
