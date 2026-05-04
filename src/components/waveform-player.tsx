@@ -6,6 +6,8 @@ interface WaveformPlayerProps {
   title: string
   source?: string
   duration?: number
+  audioUrl?: string
+  onTimeUpdate?: (currentTime: number, duration: number) => void
 }
 
 function generateBars(count: number, seed = 7) {
@@ -28,17 +30,51 @@ function generateBars(count: number, seed = 7) {
 export function WaveformPlayer({
   title,
   source = 'Shadowing · BBC interview',
-  duration = 154,
+  duration: durationProp = 154,
+  audioUrl,
+  onTimeUpdate,
 }: WaveformPlayerProps) {
   const BAR_COUNT = 96
   const bars = useMemo(() => generateBars(BAR_COUNT, title.length || 7), [title])
   const [progress, setProgress] = useState(0)
   const [playing, setPlaying] = useState(false)
+  const [duration, setDuration] = useState(durationProp)
   const containerRef = useRef<HTMLDivElement>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  // simulated playback refs
   const rafRef = useRef<number | null>(null)
   const lastTickRef = useRef<number>(0)
 
+  // Real audio mode
   useEffect(() => {
+    if (!audioUrl) return
+    const audio = new Audio(audioUrl)
+    audioRef.current = audio
+
+    audio.addEventListener('loadedmetadata', () => {
+      setDuration(audio.duration)
+    })
+    audio.addEventListener('timeupdate', () => {
+      if (!audio.duration) return
+      const p = audio.currentTime / audio.duration
+      setProgress(p)
+      onTimeUpdate?.(audio.currentTime, audio.duration)
+    })
+    audio.addEventListener('ended', () => {
+      setPlaying(false)
+      setProgress(1)
+    })
+
+    return () => {
+      audio.pause()
+      audio.src = ''
+      audioRef.current = null
+    }
+  }, [audioUrl]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Simulated playback mode
+  useEffect(() => {
+    if (audioUrl) return
     if (!playing) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
       return
@@ -61,22 +97,49 @@ export function WaveformPlayer({
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
     }
-  }, [playing, duration])
+  }, [playing, duration, audioUrl])
 
-  const seek = (e: React.MouseEvent<HTMLDivElement>) => {
-    const el = containerRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    const x = (e.clientX - rect.left) / rect.width
-    setProgress(Math.max(0, Math.min(1, x)))
+  function togglePlay() {
+    if (audioRef.current) {
+      if (playing) {
+        audioRef.current.pause()
+        setPlaying(false)
+      } else {
+        if (progress >= 1) {
+          audioRef.current.currentTime = 0
+          setProgress(0)
+        }
+        audioRef.current.play()
+        setPlaying(true)
+      }
+    } else {
+      if (progress >= 1) setProgress(0)
+      setPlaying((p) => !p)
+    }
   }
 
-  const reset = () => {
+  function seek(e: React.MouseEvent<HTMLDivElement>) {
+    const el = containerRef.current
+    if (!el) return
+    const x = (e.clientX - el.getBoundingClientRect().left) / el.offsetWidth
+    const t = Math.max(0, Math.min(1, x))
+    setProgress(t)
+    if (audioRef.current) {
+      audioRef.current.currentTime = t * audioRef.current.duration
+    }
+  }
+
+  function reset() {
     setPlaying(false)
     setProgress(0)
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+    }
   }
 
   const fmt = (s: number) => {
+    if (!isFinite(s)) return '0:00'
     const m = Math.floor(s / 60)
     const sec = Math.floor(s % 60)
     return `${m}:${sec.toString().padStart(2, '0')}`
@@ -89,16 +152,13 @@ export function WaveformPlayer({
           <Mic className="size-3.5 text-primary" />
           <h3 className="text-sm font-medium">Audio · Shadowing</h3>
         </div>
-        <span className="text-[10px] text-muted-foreground/70">
-          take 04 · 22 Apr
-        </span>
+        {source && (
+          <span className="text-[10px] text-muted-foreground/70">{source}</span>
+        )}
       </div>
 
       <div className="p-5 space-y-4">
-        <div>
-          <p className="text-sm text-foreground">{title}</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">{source}</p>
-        </div>
+        <p className="text-sm text-foreground">{title}</p>
 
         {/* Waveform */}
         <div
@@ -138,10 +198,7 @@ export function WaveformPlayer({
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => {
-              if (progress >= 1) setProgress(0)
-              setPlaying((p) => !p)
-            }}
+            onClick={togglePlay}
             className="size-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity"
             aria-label={playing ? 'Pause' : 'Play'}
           >

@@ -242,6 +242,30 @@ export async function listJournalPostsForEvaluator() {
   return data as Array<{ id: string; title: string | null; content: string; created_at: string }>
 }
 
+// ── Storage ────────────────────────────────────────────────────────────────
+
+export async function uploadShadowingFile(file: File): Promise<string> {
+  const uid = await getUid()
+  const ext = file.name.split('.').pop() ?? 'mp3'
+  const id = crypto.randomUUID()
+  const path = `${uid}/shadowing/${id}.${ext}`
+  const { error } = await supabase.storage.from('media').upload(path, file)
+  if (error) throw error
+  return path
+}
+
+export async function getSignedUrl(storagePath: string): Promise<string> {
+  const { data, error } = await supabase.storage.from('media').createSignedUrl(storagePath, 3600)
+  if (error || !data?.signedUrl) throw error ?? new Error('No signed URL')
+  return data.signedUrl
+}
+
+export async function deleteShadowingSessionFull(id: string, storagePath: string): Promise<void> {
+  await supabase.storage.from('media').remove([storagePath]).catch(() => {})
+  const { error } = await supabase.from('shadowing_sessions').delete().eq('id', id)
+  if (error) throw error
+}
+
 export async function createBookAnnotation(
   payload: Pick<BookAnnotation, 'book_id' | 'kind' | 'content' | 'page'>,
 ): Promise<BookAnnotation> {

@@ -1,41 +1,68 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { WaveformPlayer } from '@/components/waveform-player'
+import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
+import { SessionList } from '@/components/english/shadowing/session-list'
+import { SessionDetail } from '@/components/english/shadowing/session-detail'
+import { SessionUpload } from '@/components/english/shadowing/session-upload'
+import { listShadowingSessions } from '@/lib/english/queries'
+import type { ShadowingSession } from '@/lib/english/types'
 
 export const Route = createFileRoute('/english/shadowing')({
   component: ShadowingPage,
 })
 
+type View =
+  | { kind: 'list' }
+  | { kind: 'upload' }
+  | { kind: 'session'; sessionId: string }
+
 function ShadowingPage() {
-  return (
-    <div className="space-y-6 max-w-2xl">
-      <div>
-        <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground mb-1">Audio</p>
-        <h2 className="text-xl font-medium tracking-tight">Shadowing Studio</h2>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          Upload and review shadowing recordings with transcript and notes — coming in Phase 5.
-        </p>
-      </div>
+  const [view, setView] = useState<View>({ kind: 'list' })
+  const [sessions, setSessions] = useState<ShadowingSession[]>([])
 
-      <WaveformPlayer
-        title="The unreasonable effectiveness of slow reading"
-        source="Shadowing · BBC interview · 2026-04-22"
-        duration={154}
+  useEffect(() => {
+    listShadowingSessions()
+      .then(setSessions)
+      .catch(() => toast.error('Failed to load sessions'))
+  }, [])
+
+  const currentSession =
+    view.kind === 'session'
+      ? sessions.find((s) => s.id === view.sessionId)
+      : undefined
+
+  if (view.kind === 'upload') {
+    return (
+      <SessionUpload
+        onCreated={(session) => {
+          setSessions((prev) => [session, ...prev])
+          setView({ kind: 'session', sessionId: session.id })
+        }}
+        onCancel={() => setView({ kind: 'list' })}
       />
+    )
+  }
 
-      <div className="grid grid-cols-3 gap-2 text-center">
-        <div className="rounded-md border border-border/70 bg-card/40 px-3 py-3">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Sessions</p>
-          <p className="mt-1 font-mono text-sm tabular-nums">128</p>
-        </div>
-        <div className="rounded-md border border-border/70 bg-card/40 px-3 py-3">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Streak</p>
-          <p className="mt-1 font-mono text-sm tabular-nums">19d</p>
-        </div>
-        <div className="rounded-md border border-border/70 bg-card/40 px-3 py-3">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Hours</p>
-          <p className="mt-1 font-mono text-sm tabular-nums">42.5</p>
-        </div>
-      </div>
-    </div>
+  if (view.kind === 'session' && currentSession) {
+    return (
+      <SessionDetail
+        session={currentSession}
+        onBack={() => setView({ kind: 'list' })}
+        onQualityChange={(id, quality) =>
+          setSessions((prev) =>
+            prev.map((s) => (s.id === id ? { ...s, quality } : s)),
+          )
+        }
+      />
+    )
+  }
+
+  return (
+    <SessionList
+      sessions={sessions}
+      onSelect={(id) => setView({ kind: 'session', sessionId: id })}
+      onUpload={() => setView({ kind: 'upload' })}
+      onDeleted={(id) => setSessions((prev) => prev.filter((s) => s.id !== id))}
+    />
   )
 }
