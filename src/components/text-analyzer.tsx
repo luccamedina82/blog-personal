@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Radar,
   RadarChart,
@@ -8,6 +8,9 @@ import {
 } from 'recharts'
 import { Button } from '@/components/ui/button'
 import { Sparkles, Loader2 } from 'lucide-react'
+import { createEvaluatorRun } from '@/lib/english/queries'
+import type { EvaluatorRun } from '@/lib/english/types'
+import type { SourceMode } from '@/components/english/evaluator/source-picker'
 
 type Score = {
   metric: string
@@ -68,18 +71,47 @@ function analyze(text: string): Score[] {
 const DEFAULT_TEXT =
   'Although the early drafts felt clumsy, I kept rewriting until the rhythm of the sentences finally matched what I had in mind. The exercise reminded me that fluency is mostly the patience to revise.'
 
-export function TextAnalyzer() {
-  const [text, setText] = useState(DEFAULT_TEXT)
+interface TextAnalyzerProps {
+  source?: SourceMode
+  sourceRef?: string | null
+  initialText?: string
+  onSaved?: (run: EvaluatorRun) => void
+}
+
+export function TextAnalyzer({
+  source = 'paste',
+  sourceRef = null,
+  initialText,
+  onSaved,
+}: TextAnalyzerProps) {
+  'use no memo'
+  const [text, setText] = useState(initialText ?? DEFAULT_TEXT)
   const [result, setResult] = useState<Score[] | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const handleAnalyze = () => {
+  useEffect(() => {
+    if (initialText !== undefined) setText(initialText)
+  }, [initialText])
+
+  const handleAnalyze = async () => {
     if (!text.trim()) return
     setLoading(true)
-    setTimeout(() => {
-      setResult(analyze(text))
-      setLoading(false)
-    }, 700)
+    await new Promise((r) => setTimeout(r, 700))
+    const scores = analyze(text)
+    setResult(scores)
+    setLoading(false)
+
+    try {
+      const run = await createEvaluatorRun({
+        source,
+        source_ref: sourceRef,
+        input_text: text,
+        scores: scores.map((s) => ({ metric: s.metric, value: s.value })),
+      })
+      onSaved?.(run)
+    } catch {
+      // Non-blocking — UI already updated
+    }
   }
 
   const overall = result
@@ -122,7 +154,7 @@ export function TextAnalyzer() {
             htmlFor="text-analyze"
             className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground"
           >
-            Paste your text
+            {source === 'paste' ? 'Paste your text' : `Text from ${source}`}
           </label>
           <textarea
             id="text-analyze"

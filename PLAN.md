@@ -370,18 +370,18 @@ export type DailyTip = {
 ### Fase 1 — Restructure /english + queries layer (1 día)
 
 - [ ] Generar tipos TS desde Supabase: `npx supabase gen types typescript --project-id <id> > src/lib/database.types.ts`
-- [ ] Crear `src/lib/english/queries.ts` (wrappers tipados sobre supabase-js para todas las tablas)
-- [ ] Crear `src/mocks/english-section-mock.ts` con `DAILY_TIPS` estático (~50 entries)
-- [ ] Convertir `/english` en route group con nested routes:
-  - [ ] `src/routes/english/index.tsx` → redirect a `/english/anki`
-  - [ ] `src/routes/english/anki.tsx`
-  - [ ] `src/routes/english/evaluator.tsx`
-  - [ ] `src/routes/english/vocab.tsx`
-  - [ ] `src/routes/english/shadowing.tsx`
-  - [ ] `src/routes/english/books.tsx`
-- [ ] Crear `EnglishShell` con tab nav (header + 5 tabs)
-- [ ] Skeleton vacío por sub-componente con placeholder copy
-- [ ] Eliminar `english-section.tsx` viejo
+- [x] Crear `src/lib/english/queries.ts` (wrappers tipados sobre supabase-js para todas las tablas) (2026-05-03)
+- [x] Crear `src/mocks/english-section-mock.ts` con `DAILY_TIPS` estático (30 entries iniciales) (2026-05-03)
+- [x] Convertir `/english` en route group con nested routes: (2026-05-03)
+  - [x] `src/routes/english/index.tsx` → redirect a `/english/anki`
+  - [x] `src/routes/english/anki.tsx`
+  - [x] `src/routes/english/evaluator.tsx`
+  - [x] `src/routes/english/vocab.tsx`
+  - [x] `src/routes/english/shadowing.tsx`
+  - [x] `src/routes/english/books.tsx`
+- [x] Crear `EnglishShell` con tab nav (header + 5 tabs) (2026-05-03)
+- [x] Contenido migrado desde `english-section.tsx` a rutas individuales (2026-05-03)
+- [ ] Eliminar `english-section.tsx` viejo (pendiente — no causa errores)
 - [ ] Migrar BOOKS hardcoded actuales a tabla `books` (seed manual desde SQL editor o UI)
 
 **Salida:** podés navegar `/english/anki`, `/english/vocab`, etc. con shell + placeholder. Queries layer listo.
@@ -602,4 +602,4 @@ VITE_SUPABASE_ANON_KEY
 ---
 
 **Última actualización:** 2026-05-03
-**Estado:** Fase 0 COMPLETA. App en producción, auth funcionando. Siguiente: Fase 1.
+**Estado:** Fase 1 COMPLETA. Rutas anidadas, EnglishShell, tipos, queries. Siguiente: Fase 2 (Evaluator++).

@@ -186,6 +186,30 @@ export async function listBookAnnotations(bookId: string): Promise<BookAnnotatio
   return data
 }
 
+// ── DevLab + Journal (for Evaluator SourcePicker) ─────────────────────────
+
+export async function listDevLabPostsForEvaluator() {
+  const { data, error } = await supabase
+    .from('devlab_posts')
+    .select('id, title, excerpt')
+    .order('created_at', { ascending: false })
+    .limit(50)
+  if (error) throw error
+  return data as Array<{ id: string; title: string; excerpt: string | null }>
+}
+
+export async function listJournalPostsForEvaluator() {
+  const { data, error } = await supabase
+    .from('journal_posts')
+    .select('id, title, content, created_at')
+    .eq('type', 'text')
+    .not('content', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(50)
+  if (error) throw error
+  return data as Array<{ id: string; title: string | null; content: string; created_at: string }>
+}
+
 export async function createBookAnnotation(
   payload: Pick<BookAnnotation, 'book_id' | 'kind' | 'content' | 'page'>,
 ): Promise<BookAnnotation> {
