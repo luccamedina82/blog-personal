@@ -51,7 +51,7 @@ export function DeckView({ deck, onBack, onStudy, onCardCountChange }: DeckViewP
       setCards((prev) => prev.map((c) => (c.id === editing.id ? { ...c, ...values } : c)))
       toast.success('Card updated')
     } else {
-      const created = await createCard({
+      await createCard({
         deck_id: deck.id,
         front: values.front,
         back: values.back,
@@ -59,7 +59,8 @@ export function DeckView({ deck, onBack, onStudy, onCardCountChange }: DeckViewP
         source_kind: null,
         source_ref: null,
       })
-      setCards((prev) => [created, ...prev])
+      const fresh = await listCards(deck.id)
+      setCards(fresh)
       onCardCountChange(+1)
       toast.success('Card added')
     }
