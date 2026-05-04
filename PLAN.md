@@ -496,41 +496,36 @@ export type DailyTip = {
 > Prerrequisito: migrar DevLab de mock a Supabase. Actualmente toda la data viene de `src/mocks/devlab-section-mock.ts` y se persiste solo en React state.
 
 #### 7a — Migración a Supabase
-- [ ] Crear queries en `src/lib/devlab/queries.ts`: `listCategories`, `createCategory`, `updateCategory`, `deleteCategory`, `listPosts`, `getPost`, `createPost`, `updatePost`, `deletePost`
-- [ ] Crear tipos en `src/lib/devlab/types.ts`: `DevLabCategory`, `DevLabPost` (mirror del schema ya existente en `devlab_categories` + `devlab_posts`)
-- [ ] Reescribir `devlab-section.tsx` para leer de Supabase en lugar de mock
-- [ ] Seed: correr seed SQL para poblar categorías + posts iniciales (ampliar `supabase/seed.sql`)
-- [ ] Borrar `src/mocks/devlab-section-mock.ts` una vez migrado
+- [x] Crear `src/lib/devlab/types.ts`: `DevLabCategory`, `DevLabPost`, `DevLabBlock`, `PostDraft` (2026-05-04)
+- [x] Crear `src/lib/devlab/queries.ts`: listCategories/Posts, create/update/delete para categorías y posts (2026-05-04)
+- [x] Reescribir `devlab-section.tsx` para leer de Supabase (2026-05-04)
+- [x] Seed: 6 categorías DevLab en `supabase/seed.sql` (2026-05-04)
+- [x] Borrar `src/mocks/devlab-section-mock.ts` (2026-05-04)
 
 #### 7b — CRUD Posts
-- [x] Crear post (editor ya existe, guarda en estado local)
-- [ ] Persistir `createPost` en Supabase al publicar (desde `DevLabPostEditor`)
-- [ ] Editar post: abrir editor pre-cargado con data existente (`initialPost` prop + `updatePost`)
-- [ ] Eliminar post: botón con `AlertDialog` en `PostView` + en lista de posts
+- [x] Persistir `createPost` en Supabase (reading_time computado del contenido) (2026-05-04)
+- [x] Editar post: editor pre-cargado con `initial` prop + `updatePost` (2026-05-04)
+- [x] Eliminar post: `AlertDialog` en `PostView` + en lista (2026-05-04)
 
 #### 7c — CRUD Categorías
-- [ ] Crear categoría: modal con campos slug, label, description, icon (picker de íconos Lucide)
-- [ ] Renombrar / editar categoría: inline o modal
-- [ ] Eliminar categoría: `AlertDialog` — posts quedan sin categoría (`category_id = null`)
+- [x] `CategoryForm` modal: label, description, icon picker (20 íconos Lucide) (2026-05-04)
+- [x] Crear / editar categoría (2026-05-04)
+- [x] Eliminar categoría con `AlertDialog` (2026-05-04)
 
-#### 7d — Reorden de bloques (fix)
-- [ ] Agregar `moveBlock(id, 'up' | 'down')` en `DevLabPostEditor`
-- [ ] Agregar botones ▲ ▼ en el header de cada bloque (reemplazar `GripHandle` decorativo o agregar junto a él)
-- [ ] Deshabilitar ▲ en primer bloque, ▼ en último
-- [ ] Drag-and-drop real con `@dnd-kit/core` *(opcional, nice-to-have — los botones up/down cubren el caso de uso)*
+#### 7d — Reorden de bloques
+- [x] `moveBlock(id, 'up' | 'down')` en `DevLabPostEditor` (2026-05-04)
+- [x] Botones ▲▼ por bloque, deshabilitados en extremos (2026-05-04)
+- [ ] Drag-and-drop con `@dnd-kit/core` *(diferido, nice-to-have)*
 
-#### 7e — Rich text + nuevos tipos de bloque
-- [ ] Decidir estrategia: **Tiptap** (WYSIWYG completo) vs **Markdown rendering** (parsear `**bold**` en textarea)
-  - Tiptap: más features, más bundle size (~50kb gz), toolbar visual → recomendado si querés UX tipo Notion
-  - Markdown: cero dependencias extra, familiarizado si sabés Markdown → más austero pero funcional
-- [ ] Nuevo tipo de bloque `heading`: selector H1 / H2 / H3 + input de texto
-- [ ] Nuevo tipo de bloque `image`: file picker → upload a Supabase Storage → render `<img>` con signed URL
-- [ ] Si se elige Tiptap: instalar `@tiptap/react @tiptap/starter-kit @tiptap/extension-underline @tiptap/extension-image` y reemplazar `TextBlockEditor` por editor Tiptap con toolbar (bold / italic / underline / heading / tamaño)
-- [ ] Si se elige Markdown: agregar mini-toolbar sobre `textarea` que inyecta syntax (`**`, `_`, `# `, `## `) + renderizar con `react-markdown` + `remark-gfm` en `PostView`
-- [ ] Actualizar `DraftBlock` type para incluir `heading` e `image`
-- [ ] Actualizar renderer en `PostView` para manejar nuevos tipos de bloque
+#### 7e — Rich text + nuevos tipos de bloque (Tiptap)
+- [x] Instalar `@tiptap/react @tiptap/starter-kit @tiptap/extension-underline @tiptap/extension-placeholder` (2026-05-04)
+- [x] `TiptapEditor`: toolbar estático B/I/U/H1/H2/H3/listas/blockquote/code inline (2026-05-04)
+- [x] `TextBlockEditor` usa Tiptap, almacena HTML en `block.html` (2026-05-04)
+- [x] Nuevo `ImageBlockEditor`: drag-drop/click → upload Supabase Storage → `block.storage_path` (2026-05-04)
+- [x] `PostView` renderiza HTML con `.tiptap-render` CSS, imágenes con signed URL (2026-05-04)
+- [x] Estilos ProseMirror + tiptap-render en `index.css` (2026-05-04)
 
-**Salida:** DevLab totalmente funcional online — categorías y posts en Supabase, editor con rich text y reorden, imágenes subidas al bucket.
+**Salida:** DevLab totalmente funcional online — categorías y posts en Supabase, editor Tiptap con rich text, imágenes al bucket, reorden con ▲▼.
 
 ---
 
@@ -666,7 +661,7 @@ VITE_SUPABASE_ANON_KEY
 ---
 
 **Última actualización:** 2026-05-04
-**Estado:** Fases 0–6 COMPLETAS + keyboard shortcuts + seed SQL. Módulo English online: Anki Lab (SM-2 SRS), Vocab CRUD, Evaluator con historial, Shadowing Studio con categorías, Books con anotaciones + → Anki, búsqueda global ⌘K, atajos `g+letra`. Siguiente: Fase 7 — DevLab CRUD + Editor mejorado (migración Supabase, edit/delete posts, CRUD categorías, reorden bloques, rich text).
+**Estado:** Fases 0–7 COMPLETAS. DevLab: CRUD categorías + posts en Supabase, editor Tiptap (B/I/U/H1-H3/listas/blockquote/imágenes), reorden bloques ▲▼. Siguiente: decidir Fase 8 (IA real) o iniciar módulos /faculty o /personal.
 
 
 
