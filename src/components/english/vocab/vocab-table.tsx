@@ -8,6 +8,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { SaveToAnkiButton } from '@/components/english/anki/save-to-anki-button'
 import type { VocabEntry } from '@/lib/english/types'
 
 interface VocabTableProps {
@@ -82,6 +83,11 @@ export function VocabTable({ entries, onEdit, onDelete }: VocabTableProps) {
                   )}
                 </div>
                 <div className="px-3 py-3 flex items-center gap-1 self-center">
+                  <SaveToAnkiButton
+                    front={entry.term}
+                    back={`${entry.meaning}${entry.example ? `\n\n"${entry.example}"` : ''}`}
+                    sourceKind={null}
+                  />
                   <Button
                     variant="ghost"
                     size="icon"

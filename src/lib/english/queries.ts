@@ -1,7 +1,33 @@
 import { supabase } from '@/lib/supabase'
 import type { Deck, Card, VocabEntry, EvaluatorRun, ShadowingSession, Book, BookAnnotation } from './types'
 
+async function getUid(): Promise<string> {
+  const { data } = await supabase.auth.getSession()
+  const uid = data.session?.user?.id
+  if (!uid) throw new Error('Not authenticated')
+  return uid
+}
+
 // ── Decks ──────────────────────────────────────────────────────────────────
+
+export type DeckWithCount = Deck & { card_count: number }
+
+export async function listDecksWithCardCount(): Promise<DeckWithCount[]> {
+  const { data, error } = await supabase
+    .from('decks')
+    .select('*, cards(count)')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []).map((d: any) => ({
+    id: d.id,
+    user_id: d.user_id,
+    name: d.name,
+    category: d.category as Deck['category'],
+    description: d.description,
+    created_at: d.created_at,
+    card_count: Array.isArray(d.cards) && d.cards.length > 0 ? (d.cards[0].count ?? 0) : 0,
+  }))
+}
 
 export async function listDecks(): Promise<Deck[]> {
   const { data, error } = await supabase
@@ -13,7 +39,8 @@ export async function listDecks(): Promise<Deck[]> {
 }
 
 export async function createDeck(payload: Pick<Deck, 'name' | 'category' | 'description'>): Promise<Deck> {
-  const { data, error } = await supabase.from('decks').insert(payload).select().single()
+  const user_id = await getUid()
+  const { data, error } = await supabase.from('decks').insert({ ...payload, user_id }).select().single()
   if (error) throw error
   return data
 }
@@ -49,7 +76,8 @@ export async function listDueCards(deckId: string): Promise<Card[]> {
 export async function createCard(
   payload: Pick<Card, 'deck_id' | 'front' | 'back' | 'tags' | 'source_kind' | 'source_ref'>,
 ): Promise<Card> {
-  const { data, error } = await supabase.from('cards').insert(payload).select().single()
+  const user_id = await getUid()
+  const { data, error } = await supabase.from('cards').insert({ ...payload, user_id }).select().single()
   if (error) throw error
   return data
 }
@@ -78,7 +106,8 @@ export async function listVocab(): Promise<VocabEntry[]> {
 export async function createVocab(
   payload: Pick<VocabEntry, 'kind' | 'term' | 'meaning' | 'example' | 'tags'>,
 ): Promise<VocabEntry> {
-  const { data, error } = await supabase.from('vocab_entries').insert(payload).select().single()
+  const user_id = await getUid()
+  const { data, error } = await supabase.from('vocab_entries').insert({ ...payload, user_id }).select().single()
   if (error) throw error
   return data
 }
@@ -108,7 +137,8 @@ export async function listEvaluatorRuns(): Promise<EvaluatorRun[]> {
 export async function createEvaluatorRun(
   payload: Pick<EvaluatorRun, 'source' | 'source_ref' | 'input_text' | 'scores'>,
 ): Promise<EvaluatorRun> {
-  const { data, error } = await supabase.from('evaluator_runs').insert(payload).select().single()
+  const user_id = await getUid()
+  const { data, error } = await supabase.from('evaluator_runs').insert({ ...payload, user_id }).select().single()
   if (error) throw error
   return data
 }
@@ -132,7 +162,8 @@ export async function listShadowingSessions(): Promise<ShadowingSession[]> {
 export async function createShadowingSession(
   payload: Pick<ShadowingSession, 'title' | 'storage_path' | 'kind' | 'duration_seconds'>,
 ): Promise<ShadowingSession> {
-  const { data, error } = await supabase.from('shadowing_sessions').insert(payload).select().single()
+  const user_id = await getUid()
+  const { data, error } = await supabase.from('shadowing_sessions').insert({ ...payload, user_id }).select().single()
   if (error) throw error
   return data
 }
@@ -161,7 +192,8 @@ export async function listBooks(): Promise<Book[]> {
 export async function createBook(
   payload: Pick<Book, 'title' | 'author' | 'rating' | 'summary' | 'tags'>,
 ): Promise<Book> {
-  const { data, error } = await supabase.from('books').insert(payload).select().single()
+  const user_id = await getUid()
+  const { data, error } = await supabase.from('books').insert({ ...payload, user_id }).select().single()
   if (error) throw error
   return data
 }
@@ -213,7 +245,8 @@ export async function listJournalPostsForEvaluator() {
 export async function createBookAnnotation(
   payload: Pick<BookAnnotation, 'book_id' | 'kind' | 'content' | 'page'>,
 ): Promise<BookAnnotation> {
-  const { data, error } = await supabase.from('book_annotations').insert(payload).select().single()
+  const user_id = await getUid()
+  const { data, error } = await supabase.from('book_annotations').insert({ ...payload, user_id }).select().single()
   if (error) throw error
   return data
 }

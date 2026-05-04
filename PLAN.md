@@ -429,22 +429,23 @@ export type DailyTip = {
 
 ### Fase 4 — Anki Lab (prototipo visual, 2 días)
 
-- [ ] `DeckGrid` reusando patrón de `CategoryGrid` de devlab
-- [ ] 5 categorías de mazos: Vocab / Phrasal Verbs / Idioms / Book Quotes / Tech Notes
-- [ ] CRUD decks (modal create + delete confirmation)
-- [ ] `DeckView`: lista de cards de un mazo + acciones
-- [ ] `CardEditor`: front/back/tags (modal con form)
-- [ ] `StudyMode`:
-  - [ ] Card flip animation (CSS 3D transform)
-  - [ ] Botones: Easy / Good / Hard / Again
-  - [ ] SRS lite (SM-2): actualiza ease/interval_days/due via update query
-  - [ ] Filtra cards `due <= now()` en SQL
-- [ ] Botón global "Crear card desde texto" (recibe `{ front, back, source }`)
-- [ ] Conectar con vocab / books / evaluator (botón "→ Anki" en cada uno)
+- [x] `DeckGrid` reusando patrón de `CategoryGrid` de devlab (2026-05-04)
+- [x] 5 categorías de mazos: Vocab / Phrasal Verbs / Idioms / Book Quotes / Tech Notes (2026-05-04)
+- [x] CRUD decks (modal create + delete confirmation) (2026-05-04)
+- [x] `DeckView`: lista de cards de un mazo + acciones (edit/delete/due badge) (2026-05-04)
+- [x] `CardEditor`: front/back/tags (modal con form, create y edit) (2026-05-04)
+- [x] `StudyMode`: (2026-05-04)
+  - [x] Card flip animation (CSS 3D transform + Tailwind arbitrary values)
+  - [x] Botones: Easy / Good / Hard / Again
+  - [x] SRS lite (SM-2) en `src/lib/english/srs.ts`: actualiza ease/interval_days/due
+  - [x] Filtra cards `due <= now()` en SQL (`listDueCards`)
+- [x] `SaveToAnkiButton` — componente standalone reutilizable con deck selector (2026-05-04)
+- [x] Conectar con vocab: botón "→ Anki" por fila en `VocabTable` (2026-05-04)
+- [ ] Conectar con evaluator y books (botón → Anki) *(deferido Fase 6)*
 
 **TECH DEBT marcada:** Anki import/export `.apkg` real → ver sección 7.
 
-**Salida:** mazos online, cards persistidas, SRS básico.
+**Salida:** mazos online, cards persistidas, SRS básico, vocab cross-linked. Build limpio.
 
 ---
 
@@ -607,7 +608,7 @@ VITE_SUPABASE_ANON_KEY
 ---
 
 **Última actualización:** 2026-05-04
-**Estado:** Fase 3 COMPLETA. Vocab CRUD online. Siguiente: seed vocab + Fase 4 (Anki Lab).
+**Estado:** Fase 4 COMPLETA. Anki Lab online — DeckGrid, DeckView, StudyMode + SM-2, SaveToAnkiButton en Vocab. Siguiente: seed decks/vocab + Fase 5 (Shadowing Studio).
 
 
 
