@@ -491,7 +491,50 @@ export type DailyTip = {
 
 ---
 
-### Fase 7 — IA real (cuando justifique pagar)
+### Fase 7 — DevLab CRUD + Editor mejorado (2-3 días)
+
+> Prerrequisito: migrar DevLab de mock a Supabase. Actualmente toda la data viene de `src/mocks/devlab-section-mock.ts` y se persiste solo en React state.
+
+#### 7a — Migración a Supabase
+- [ ] Crear queries en `src/lib/devlab/queries.ts`: `listCategories`, `createCategory`, `updateCategory`, `deleteCategory`, `listPosts`, `getPost`, `createPost`, `updatePost`, `deletePost`
+- [ ] Crear tipos en `src/lib/devlab/types.ts`: `DevLabCategory`, `DevLabPost` (mirror del schema ya existente en `devlab_categories` + `devlab_posts`)
+- [ ] Reescribir `devlab-section.tsx` para leer de Supabase en lugar de mock
+- [ ] Seed: correr seed SQL para poblar categorías + posts iniciales (ampliar `supabase/seed.sql`)
+- [ ] Borrar `src/mocks/devlab-section-mock.ts` una vez migrado
+
+#### 7b — CRUD Posts
+- [x] Crear post (editor ya existe, guarda en estado local)
+- [ ] Persistir `createPost` en Supabase al publicar (desde `DevLabPostEditor`)
+- [ ] Editar post: abrir editor pre-cargado con data existente (`initialPost` prop + `updatePost`)
+- [ ] Eliminar post: botón con `AlertDialog` en `PostView` + en lista de posts
+
+#### 7c — CRUD Categorías
+- [ ] Crear categoría: modal con campos slug, label, description, icon (picker de íconos Lucide)
+- [ ] Renombrar / editar categoría: inline o modal
+- [ ] Eliminar categoría: `AlertDialog` — posts quedan sin categoría (`category_id = null`)
+
+#### 7d — Reorden de bloques (fix)
+- [ ] Agregar `moveBlock(id, 'up' | 'down')` en `DevLabPostEditor`
+- [ ] Agregar botones ▲ ▼ en el header de cada bloque (reemplazar `GripHandle` decorativo o agregar junto a él)
+- [ ] Deshabilitar ▲ en primer bloque, ▼ en último
+- [ ] Drag-and-drop real con `@dnd-kit/core` *(opcional, nice-to-have — los botones up/down cubren el caso de uso)*
+
+#### 7e — Rich text + nuevos tipos de bloque
+- [ ] Decidir estrategia: **Tiptap** (WYSIWYG completo) vs **Markdown rendering** (parsear `**bold**` en textarea)
+  - Tiptap: más features, más bundle size (~50kb gz), toolbar visual → recomendado si querés UX tipo Notion
+  - Markdown: cero dependencias extra, familiarizado si sabés Markdown → más austero pero funcional
+- [ ] Nuevo tipo de bloque `heading`: selector H1 / H2 / H3 + input de texto
+- [ ] Nuevo tipo de bloque `image`: file picker → upload a Supabase Storage → render `<img>` con signed URL
+- [ ] Si se elige Tiptap: instalar `@tiptap/react @tiptap/starter-kit @tiptap/extension-underline @tiptap/extension-image` y reemplazar `TextBlockEditor` por editor Tiptap con toolbar (bold / italic / underline / heading / tamaño)
+- [ ] Si se elige Markdown: agregar mini-toolbar sobre `textarea` que inyecta syntax (`**`, `_`, `# `, `## `) + renderizar con `react-markdown` + `remark-gfm` en `PostView`
+- [ ] Actualizar `DraftBlock` type para incluir `heading` e `image`
+- [ ] Actualizar renderer en `PostView` para manejar nuevos tipos de bloque
+
+**Salida:** DevLab totalmente funcional online — categorías y posts en Supabase, editor con rich text y reorden, imágenes subidas al bucket.
+
+---
+
+### Fase 8 — IA real (cuando justifique pagar)
 
 > Acá aparece la pregunta NestJS vs Edge Functions. Decisión deferida hasta llegar.
 
@@ -499,8 +542,13 @@ export type DailyTip = {
   - NestJS = más estructura, más overhead deploy, más control
   - Edge Functions = cero infra, Deno, junto a Supabase
   - Vercel Functions = junto al frontend, simple, Node
+- [ ] Decisión: **NestJS en Railway** vs **Supabase Edge Functions (Deno)** vs **Vercel Serverless Functions**
+  - NestJS = más estructura, más overhead deploy, más control
+  - Edge Functions = cero infra, Deno, junto a Supabase
+  - Vercel Functions = junto al frontend, simple, Node
 - [ ] Tip del día → endpoint llama Anthropic API con prompt templado, cachea en tabla `ai_cache`
 - [ ] Evaluator real → reemplazar mock con Anthropic API (mantener fallback heurístico)
+- [ ] Evaluator → Anki: con IA real, sugerir vocabulario específico del texto para guardar como card
 - [ ] Transcripción auto shadowing → Whisper API (OpenAI) o Whisper self-hosted
 - [ ] Tabla `ai_cache (input_hash, output, model, created_at)` para no pagar 2 veces
 
@@ -618,7 +666,7 @@ VITE_SUPABASE_ANON_KEY
 ---
 
 **Última actualización:** 2026-05-04
-**Estado:** Fases 0–6 COMPLETAS + keyboard shortcuts + seed SQL. Módulo English online: Anki Lab (SM-2 SRS), Vocab CRUD, Evaluator con historial, Shadowing Studio con categorías, Books con anotaciones + → Anki, búsqueda global ⌘K, atajos `g+letra`. Siguiente: decidir Fase 7 (IA real, pago).
+**Estado:** Fases 0–6 COMPLETAS + keyboard shortcuts + seed SQL. Módulo English online: Anki Lab (SM-2 SRS), Vocab CRUD, Evaluator con historial, Shadowing Studio con categorías, Books con anotaciones + → Anki, búsqueda global ⌘K, atajos `g+letra`. Siguiente: Fase 7 — DevLab CRUD + Editor mejorado (migración Supabase, edit/delete posts, CRUD categorías, reorden bloques, rich text).
 
 
 
