@@ -391,14 +391,14 @@ export type DailyTip = {
 ### Fase 2 — Evaluator++ (1 día)
 
 - [ ] Migrar mocks de DevLab y Journal a tablas (seed inicial desde SQL editor con tu user_id)
-- [ ] `SourcePicker` con 3 modos: paste / Bitácora / DevLab
-  - [ ] Paste: textarea actual
-  - [ ] Bitácora: select que llama `queries.listJournalPosts({ type: 'text' })`
-  - [ ] DevLab: select que llama `queries.listDevLabPostsWithText()`
-- [ ] Modificar `TextAnalyzer` para aceptar `source` y `sourceRef`
-- [ ] Persistir cada análisis: `queries.createEvaluatorRun(...)`
-- [ ] `HistoryChart`: recharts LineChart con scores en el tiempo (query `evaluator_runs` ordenado)
-- [ ] Botón "Limpiar historial" con `AlertDialog` + `queries.clearEvaluatorHistory()`
+- [x] `SourcePicker` con 3 modos: paste / Bitácora / DevLab (2026-05-03)
+  - [x] Paste: textarea actual
+  - [x] Bitácora: select que llama `queries.listJournalPostsForEvaluator()`
+  - [x] DevLab: select que llama `queries.listDevLabPostsForEvaluator()`
+- [x] Modificar `TextAnalyzer` para aceptar `source`, `sourceRef`, `initialText`, `onSaved` (2026-05-03)
+- [x] Persistir cada análisis: `queries.createEvaluatorRun(...)` (2026-05-03)
+- [x] `HistoryChart`: recharts LineChart overall score + tabla últimas 10 runs (2026-05-03)
+- [x] Botón "Limpiar historial" con `AlertDialog` + `queries.clearEvaluatorHistory()` (2026-05-03)
 - [ ] Bonus: highlights inline en el texto
 
 **Salida:** análisis sobre tus propias notas + evolución persistente.
@@ -407,18 +407,23 @@ export type DailyTip = {
 
 ### Fase 3 — Vocab+ (1 día)
 
-- [ ] Tabs internos: Words | Phrases | Connectors | Tip del día
-- [ ] CRUD vocab con `Dialog` + `react-hook-form` + `zod`
-- [ ] Persistencia vía `queries.createVocab/updateVocab/deleteVocab`
-- [ ] Búsqueda fuzzy con `cmdk` (sobre resultado de query)
-- [ ] Filtros por tag (filtrar en cliente o `tags @> array[...]` en SQL)
-- [ ] **Tip del día:**
-  - [ ] `DAILY_TIPS` array curado ~50 entries en mock (no en DB)
-  - [ ] `TipOfDay` rota por `new Date().getDate() % len`
-  - [ ] Botón "guardar como card Anki" → `queries.createCard`
-- [ ] **Seed sugerido:** ineffable, halcyon, perfunctory, trenchant, limn, ubiquitous, ephemeral, serendipity, quintessential, eloquent, nuanced, pragmatic, "hit the nail on the head", "burn the midnight oil", "piece of cake", "cost an arm and a leg", "break the ice", "the ball is in your court", "bite the bullet", "let the cat out of the bag", "on balance", "that said", "granted", "bearing this in mind", "by and large", "all things considered", etc.
+- [x] Tabs internos: Words | Phrases | Connectors | Tip del día (2026-05-04)
+- [x] CRUD vocab con `Dialog` + `react-hook-form` + `zod` (2026-05-04)
+- [x] Persistencia vía `queries.createVocab/updateVocab/deleteVocab` (2026-05-04)
+- [x] Búsqueda client-side por term/meaning/example/tags en `VocabTable` (2026-05-04)
+- [x] Filtros por kind por tab (Words / Phrases / Connectors) (2026-05-04)
+- [x] **Tip del día:** (2026-05-04)
+  - [x] `DAILY_TIPS` array curado 30 entries en mock (no en DB)
+  - [x] `TipOfDay` rota por `new Date().getDate() % len`
+  - [ ] Botón "guardar como card Anki" → `queries.createCard` *(deferido a Fase 4 — requiere deck_id)*
+- [ ] **Seed sugerido:** correr en SQL Editor de Supabase con tu `user_id` para popular vocab_entries inicial
 
-**Salida:** vocab CRUD funcional online + tip diario rotativo.
+**Salida:** vocab CRUD funcional online + tip diario rotativo. Build limpio.
+
+---
+
+**Última actualización:** 2026-05-04
+**Estado:** Fase 3 COMPLETA. Vocab CRUD con tabs, search, Supabase persistencia. Siguiente: seed inicial + Fase 4 (Anki Lab).
 
 ---
 
@@ -601,5 +606,9 @@ VITE_SUPABASE_ANON_KEY
 
 ---
 
-**Última actualización:** 2026-05-03
-**Estado:** Fase 1 COMPLETA. Rutas anidadas, EnglishShell, tipos, queries. Siguiente: Fase 2 (Evaluator++).
+**Última actualización:** 2026-05-04
+**Estado:** Fase 3 COMPLETA. Vocab CRUD online. Siguiente: seed vocab + Fase 4 (Anki Lab).
+
+
+
+
