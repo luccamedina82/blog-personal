@@ -1,424 +1,630 @@
-import { useState } from "react"
-import { cn } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
-import { InteractiveCodeBlock } from "@/components/interactive-code-block"
-import { DevLabPostEditor, type DraftPost } from "@/components/devlab-post-editor"
+import { useState, useEffect } from 'react'
+import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
-  ArrowLeft,
-  Clock,
-  CalendarDays,
-  ChevronRight,
-  MessageSquare,
-  BookOpen,
-  Plus,
-} from "lucide-react"
-import { ANNOTATIONS, CATEGORIES, SAMPLE_CODE, type Category, type Post } from "@/mocks/devlab-section-mock"
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import { InteractiveCodeBlock } from '@/components/interactive-code-block'
+import { DevLabPostEditor } from '@/components/devlab-post-editor'
+import { CategoryForm } from '@/components/devlab/category-form'
+import { getDevLabIcon } from '@/components/devlab/icon-map'
+import { supabase } from '@/lib/supabase'
+import { toast } from 'sonner'
+import {
+  ArrowLeft, Clock, CalendarDays, ChevronRight, BookOpen,
+  Plus, Pencil, Trash2, Loader2,
+} from 'lucide-react'
+import {
+  listDevLabCategories, createDevLabCategory, updateDevLabCategory, deleteDevLabCategory,
+  listDevLabPosts, createDevLabPost, updateDevLabPost, deleteDevLabPost,
+} from '@/lib/devlab/queries'
+import type { DevLabCategory, DevLabPost, DevLabBlock, PostDraft } from '@/lib/devlab/types'
 
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
+// ── View state ────────────────────────────────────────────────────────────────
 
 type View =
-  | { kind: "categories" }
-  | { kind: "posts"; categoryId: string }
-  | { kind: "post"; categoryId: string; postId: string }
-  | { kind: "editor"; categoryId: string }
+  | { kind: 'categories' }
+  | { kind: 'posts'; categoryId: string }
+  | { kind: 'post'; categoryId: string; postId: string }
+  | { kind: 'editor'; categoryId: string; editPost?: DevLabPost }
 
-// --- Level 1: Category grid ---
+// ── Signed image (resolves storage path → URL on mount) ───────────────────────
+
+function SignedImage({ path, alt }: { path: string; alt: string }) {
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    supabase.storage.from('media').createSignedUrl(path, 3600)
+      .then(({ data }) => setUrl(data?.signedUrl ?? null))
+  }, [path])
+  if (!url) return <div className="h-40 rounded-lg bg-secondary/30 animate-pulse" />
+  return <img src={url} alt={alt} className="rounded-lg max-w-full" />
+}
+
+// ── Category grid ─────────────────────────────────────────────────────────────
+
 function CategoryGrid({
+  categories,
+  postCounts,
   onSelect,
+  onEdit,
+  onDelete,
+  onNew,
 }: {
+  categories: DevLabCategory[]
+  postCounts: Record<string, number>
   onSelect: (id: string) => void
+  onEdit: (cat: DevLabCategory) => void
+  onDelete: (cat: DevLabCategory) => void
+  onNew: () => void
 }) {
   return (
     <div className="px-6 lg:px-14 py-10 lg:py-16 max-w-5xl">
-      <div className="mb-10">
-        <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground mb-2">
-          Dev Lab
-        </p>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Technical Notes
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-          A structured collection of notes on computer science fundamentals —
-          compilers, networks, systems, and the stuff that matters at the bottom
-          of the stack.
-        </p>
+      <div className="mb-10 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground mb-2">Dev Lab</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Technical Notes</h1>
+          <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+            A structured collection of notes on computer science fundamentals — compilers, networks,
+            systems, and the stuff that matters at the bottom of the stack.
+          </p>
+        </div>
+        <Button size="sm" className="gap-1.5 shrink-0" onClick={onNew}>
+          <Plus className="size-3.5" />
+          New category
+        </Button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-        {CATEGORIES.map((cat) => {
-          const Icon = cat.icon
-          const total = cat.posts.reduce((s) => s + 1, 0)
-          return (
-            <button
-              key={cat.id}
-              type="button"
-              onClick={() => onSelect(cat.id)}
-              className={cn(
-                "group relative flex flex-col items-start gap-3 rounded-lg border border-border/70",
-                "bg-card/40 hover:bg-card/80 p-5 text-left transition-all duration-200",
-                "hover:border-primary/30 hover:shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]",
-              )}
-            >
-              <div className="flex w-full items-start justify-between">
-                <span className="flex size-9 items-center justify-center rounded-md bg-secondary/60 border border-border/60">
-                  <Icon className="size-4 text-primary" />
-                </span>
-                <ChevronRight className="size-4 text-muted-foreground/40 group-hover:text-primary transition-colors mt-1" />
+      {categories.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+          <p className="text-sm text-muted-foreground">No categories yet.</p>
+          <Button size="sm" variant="outline" onClick={onNew}>Create your first category</Button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          {categories.map((cat) => {
+            const Icon = getDevLabIcon(cat.icon)
+            const total = postCounts[cat.id] ?? 0
+            return (
+              <div
+                key={cat.id}
+                className={cn(
+                  'group relative flex flex-col items-start gap-3 rounded-lg border border-border/70',
+                  'bg-card/40 hover:bg-card/80 p-5 transition-all duration-200',
+                  'hover:border-primary/30 hover:shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]',
+                )}
+              >
+                <button type="button" onClick={() => onSelect(cat.id)} className="absolute inset-0 rounded-lg" aria-label={cat.label} />
+                <div className="flex w-full items-start justify-between relative z-10 pointer-events-none">
+                  <span className="flex size-9 items-center justify-center rounded-md bg-secondary/60 border border-border/60">
+                    <Icon className="size-4 text-primary" />
+                  </span>
+                  <ChevronRight className="size-4 text-muted-foreground/40 group-hover:text-primary transition-colors mt-1" />
+                </div>
+                <div className="relative z-10 pointer-events-none">
+                  <p className="text-sm font-medium text-foreground">{cat.label}</p>
+                  <p className="mt-1 text-xs text-muted-foreground leading-relaxed line-clamp-2">{cat.description}</p>
+                </div>
+                <div className="w-full flex items-center justify-between relative z-10">
+                  <p className="text-[10px] text-muted-foreground/60 tabular-nums pointer-events-none">
+                    {total} {total === 1 ? 'note' : 'notes'}
+                  </p>
+                  <div
+                    className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button type="button" onClick={() => onEdit(cat)}
+                      className="flex items-center justify-center size-6 rounded text-muted-foreground/50 hover:text-foreground hover:bg-secondary transition-colors">
+                      <Pencil className="size-3" />
+                    </button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <button type="button"
+                          className="flex items-center justify-center size-6 rounded text-muted-foreground/50 hover:text-destructive hover:bg-secondary transition-colors">
+                          <Trash2 className="size-3" />
+                        </button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete "{cat.label}"?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            All posts in this category will become uncategorized. Cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => onDelete(cat)}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  {cat.label}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground leading-relaxed line-clamp-2">
-                  {cat.description}
-                </p>
-              </div>
-              <p className="text-[10px] text-muted-foreground/60 tabular-nums">
-                {total} {total === 1 ? "note" : "notes"}
-              </p>
-            </button>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
 
-// --- Level 2: Post list ---
+// ── Post list ─────────────────────────────────────────────────────────────────
+
 function PostList({
   category,
+  posts,
+  loading,
   onSelect,
+  onEdit,
+  onDelete,
   onBack,
   onNewPost,
 }: {
-  category: Category
+  category: DevLabCategory
+  posts: DevLabPost[]
+  loading: boolean
   onSelect: (postId: string) => void
+  onEdit: (post: DevLabPost) => void
+  onDelete: (post: DevLabPost) => void
   onBack: () => void
   onNewPost: () => void
 }) {
-  const Icon = category.icon
+  const Icon = getDevLabIcon(category.icon)
   return (
     <div className="px-6 lg:px-14 py-10 lg:py-16 max-w-3xl">
-      {/* Breadcrumb */}
-      <button
-        type="button"
-        onClick={onBack}
-        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-8"
-      >
+      <button type="button" onClick={onBack}
+        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-8">
         <ArrowLeft className="size-3.5" />
         All categories
       </button>
 
-      {/* Category header */}
       <div className="flex items-start justify-between gap-4 mb-8">
         <div className="flex items-center gap-3">
           <span className="flex size-10 items-center justify-center rounded-md bg-secondary/60 border border-border/60">
             <Icon className="size-5 text-primary" />
           </span>
           <div>
-            <h2 className="text-xl font-semibold tracking-tight">
-              {category.label}
-            </h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {category.description}
-            </p>
+            <h2 className="text-xl font-semibold tracking-tight">{category.label}</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">{category.description}</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onNewPost}
-          className="flex items-center gap-1.5 shrink-0 h-8 px-3 rounded-md border border-border/60 bg-card/40 hover:bg-card/80 hover:border-primary/30 text-xs text-muted-foreground hover:text-foreground transition-all"
-        >
+        <button type="button" onClick={onNewPost}
+          className="flex items-center gap-1.5 shrink-0 h-8 px-3 rounded-md border border-border/60 bg-card/40 hover:bg-card/80 hover:border-primary/30 text-xs text-muted-foreground hover:text-foreground transition-all">
           <Plus className="size-3.5" />
           New post
         </button>
       </div>
 
-      {/* Post list */}
-      <ul className="divide-y divide-border/50">
-        {category.posts.map((post) => (
-          <li key={post.id}>
-            <button
-              type="button"
-              onClick={() => onSelect(post.id)}
-              className="group w-full flex flex-col sm:flex-row sm:items-start gap-3 py-5 text-left hover:bg-secondary/20 -mx-3 px-3 rounded-md transition-colors"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                  {post.pinned && (
-                    <span className="text-[9px] uppercase tracking-[0.18em] text-primary font-medium">
-                      Pinned
+      {loading ? (
+        <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Loading posts…
+        </div>
+      ) : posts.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+          <p className="text-sm text-muted-foreground">No posts yet.</p>
+          <Button size="sm" variant="outline" onClick={onNewPost}>Write the first post</Button>
+        </div>
+      ) : (
+        <ul className="divide-y divide-border/50">
+          {posts.map((post) => (
+            <li key={post.id} className="group relative">
+              <button type="button" onClick={() => onSelect(post.id)}
+                className="w-full flex flex-col sm:flex-row sm:items-start gap-3 py-5 text-left hover:bg-secondary/20 -mx-3 px-3 rounded-md transition-colors">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                    {post.pinned && <span className="text-[9px] uppercase tracking-[0.18em] text-primary font-medium">Pinned</span>}
+                    {post.tags.slice(0, 2).map((t) => (
+                      <Badge key={t} variant="secondary" className="rounded-sm text-[9px] font-mono font-normal bg-secondary/40 border border-border/50 h-4 px-1.5">{t}</Badge>
+                    ))}
+                  </div>
+                  <p className="text-sm font-medium text-foreground group-hover:text-primary transition-colors leading-snug">{post.title}</p>
+                  {post.excerpt && <p className="mt-1 text-xs text-muted-foreground leading-relaxed line-clamp-2">{post.excerpt}</p>}
+                  <div className="mt-2.5 flex items-center gap-3 text-[11px] text-muted-foreground/70">
+                    <span className="flex items-center gap-1">
+                      <CalendarDays className="size-3" />
+                      {new Date(post.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </span>
-                  )}
-                  {post.tags.slice(0, 2).map((t) => (
-                    <Badge
-                      key={t}
-                      variant="secondary"
-                      className="rounded-sm text-[9px] font-mono font-normal bg-secondary/40 border border-border/50 h-4 px-1.5"
-                    >
-                      {t}
-                    </Badge>
-                  ))}
+                    {post.reading_time && (
+                      <span className="flex items-center gap-1">
+                        <Clock className="size-3" />
+                        {post.reading_time}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <p className="text-sm font-medium text-foreground group-hover:text-primary transition-colors leading-snug">
-                  {post.title}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground leading-relaxed line-clamp-2">
-                  {post.excerpt}
-                </p>
-                <div className="mt-2.5 flex items-center gap-3 text-[11px] text-muted-foreground/70">
-                  <span className="flex items-center gap-1">
-                    <CalendarDays className="size-3" />
-                    {post.date}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Clock className="size-3" />
-                    {post.readingTime}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <MessageSquare className="size-3" />
-                    {post.replies}
-                  </span>
-                </div>
+                <ChevronRight className="size-4 text-muted-foreground/30 group-hover:text-primary transition-colors shrink-0 mt-0.5 sm:mt-1" />
+              </button>
+              <div
+                className="absolute top-4 right-8 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button type="button" onClick={() => onEdit(post)}
+                  className="flex items-center justify-center size-6 rounded text-muted-foreground/50 hover:text-foreground hover:bg-secondary transition-colors">
+                  <Pencil className="size-3" />
+                </button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <button type="button"
+                      className="flex items-center justify-center size-6 rounded text-muted-foreground/50 hover:text-destructive hover:bg-secondary transition-colors">
+                      <Trash2 className="size-3" />
+                    </button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete "{post.title}"?</AlertDialogTitle>
+                      <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => onDelete(post)}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
-              <ChevronRight className="size-4 text-muted-foreground/30 group-hover:text-primary transition-colors shrink-0 mt-0.5 sm:mt-1" />
-            </button>
-          </li>
-        ))}
-      </ul>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
 
-// --- Level 3: Individual Post ---
+// ── Post view ─────────────────────────────────────────────────────────────────
+
 function PostView({
   category,
   post,
   onBack,
+  onEdit,
+  onDelete,
 }: {
-  category: Category
-  post: Post
+  category: DevLabCategory
+  post: DevLabPost
   onBack: () => void
+  onEdit: () => void
+  onDelete: () => void
 }) {
-  const hasCode = post.id === "c1"
-
   return (
     <article className="px-6 lg:px-14 py-10 lg:py-16 max-w-4xl">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-2 text-xs text-muted-foreground mb-8">
-        <button
-          type="button"
-          onClick={() => onBack()}
-          className="flex items-center gap-1.5 hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="size-3.5" />
-          {category.label}
-        </button>
-      </nav>
+      <div className="flex items-center justify-between mb-8">
+        <nav className="flex items-center gap-2 text-xs text-muted-foreground">
+          <button type="button" onClick={onBack}
+            className="flex items-center gap-1.5 hover:text-foreground transition-colors">
+            <ArrowLeft className="size-3.5" />
+            {category.label}
+          </button>
+        </nav>
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={onEdit}
+            className="flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs text-muted-foreground hover:text-foreground border border-border/60 hover:border-border transition-colors">
+            <Pencil className="size-3" />
+            Edit
+          </button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button type="button"
+                className="flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs text-muted-foreground hover:text-destructive border border-border/60 hover:border-destructive/40 transition-colors">
+                <Trash2 className="size-3" />
+                Delete
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete "{post.title}"?</AlertDialogTitle>
+                <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={onDelete}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      </div>
 
-      {/* Header */}
       <header className="mb-10">
         <div className="flex items-center gap-3 text-[11px] text-muted-foreground mb-4">
-          <span className="text-primary uppercase tracking-[0.18em]">
-            {category.label}
-          </span>
+          <span className="text-primary uppercase tracking-[0.18em]">{category.label}</span>
           <span className="size-0.5 rounded-full bg-muted-foreground/40" />
           <span className="flex items-center gap-1">
             <CalendarDays className="size-3" />
-            {post.date}
+            {new Date(post.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
           </span>
-          <span className="size-0.5 rounded-full bg-muted-foreground/40" />
-          <span className="flex items-center gap-1">
-            <Clock className="size-3" />
-            {post.readingTime} read
-          </span>
+          {post.reading_time && (
+            <>
+              <span className="size-0.5 rounded-full bg-muted-foreground/40" />
+              <span className="flex items-center gap-1">
+                <Clock className="size-3" />
+                {post.reading_time} read
+              </span>
+            </>
+          )}
         </div>
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-balance leading-snug">
-          {post.title}
-        </h1>
-        <p className="mt-4 text-[15px] text-muted-foreground leading-relaxed text-pretty max-w-2xl">
-          {post.excerpt}
-        </p>
-        <div className="mt-5 flex flex-wrap gap-1.5">
-          {post.tags.map((t) => (
-            <Badge
-              key={t}
-              variant="secondary"
-              className="rounded-md text-[10px] font-mono font-normal bg-secondary/50 border border-border/60"
-            >
-              {t}
-            </Badge>
-          ))}
-        </div>
+        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-balance leading-snug">{post.title}</h1>
+        {post.excerpt && (
+          <p className="mt-4 text-[15px] text-muted-foreground leading-relaxed text-pretty max-w-2xl">{post.excerpt}</p>
+        )}
+        {post.tags.length > 0 && (
+          <div className="mt-5 flex flex-wrap gap-1.5">
+            {post.tags.map((t) => (
+              <Badge key={t} variant="secondary" className="rounded-md text-[10px] font-mono font-normal bg-secondary/50 border border-border/60">{t}</Badge>
+            ))}
+          </div>
+        )}
       </header>
 
-      {/* Body */}
       <section className="space-y-6">
-        {post.blocks ? (
-          post.blocks.map((block) => {
-            if (block.kind === "text")
-              return (
-                <p key={block.id} className="text-[15px] text-foreground/85 leading-relaxed">
-                  {block.content}
-                </p>
-              )
-            if (block.kind === "code")
-              return (
-                <InteractiveCodeBlock
-                  key={block.id}
-                  language={block.language}
-                  filename={block.filename || undefined}
-                  code={block.code}
-                  annotations={block.annotations}
-                />
-              )
-            if (block.kind === "quote")
-              return (
-                <blockquote
-                  key={block.id}
-                  className="border-l-2 border-primary/50 pl-5 py-1 text-[15px] text-foreground/80 italic"
-                >
-                  &ldquo;{block.content}&rdquo;
-                  {block.attribution && (
-                    <footer className="mt-1 text-xs text-muted-foreground not-italic">
-                      {block.attribution}
-                    </footer>
-                  )}
-                </blockquote>
-              )
-            return null
-          })
-        ) : hasCode ? (
-          <>
-            <p className="text-[15px] text-foreground/85 leading-relaxed">
-              The simplest interpreter you can write is a recursive function
-              over an Abstract Syntax Tree. It receives a tree, walks it, and
-              returns a value. Below, an evaluator for arithmetic expressions
-              in a handful of lines:
-            </p>
-            <InteractiveCodeBlock
-              language="ts"
-              filename="evaluator.ts"
-              code={SAMPLE_CODE}
-              annotations={ANNOTATIONS}
-            />
-            <p className="text-[15px] text-foreground/85 leading-relaxed">
-              Click any highlighted line in the snippet above to surface a
-              focused note in the side panel. The notes here are the kind of
-              marginalia I keep in my own reading copy of{" "}
-              <em>
-                Compilers: Principles, Techniques, and Tools
-              </em>
-              .
-            </p>
-            <blockquote className="border-l-2 border-primary/50 pl-5 py-1 text-[15px] text-foreground/80 italic">
-              &ldquo;Optimize the IR, never the AST. The AST is a snapshot of
-              intent; the IR is the contract you compile against.&rdquo;
-            </blockquote>
-            <h2 className="text-xl font-medium tracking-tight pt-4">
-              Where this breaks down
-            </h2>
-            <p className="text-[15px] text-foreground/85 leading-relaxed">
-              Tree-walking is wonderful for teaching and prototyping. The
-              moment you introduce closures, exceptions, or first-class
-              continuations, you will reach for a bytecode VM or a proper
-              SSA-based IR. We will cover that in the next note.
-            </p>
-          </>
-        ) : (
+        {post.blocks.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
             <BookOpen className="size-8 text-muted-foreground/30" />
-            <p className="text-sm text-muted-foreground">
-              Full content coming soon.
-            </p>
+            <p className="text-sm text-muted-foreground">No content yet.</p>
           </div>
+        ) : (
+          post.blocks.map((block) => <BlockRenderer key={block.id} block={block} />)
         )}
       </section>
     </article>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Root component
-// ---------------------------------------------------------------------------
+function BlockRenderer({ block }: { block: DevLabBlock }) {
+  if (block.kind === 'text') {
+    return (
+      <div
+        className="tiptap-render"
+        dangerouslySetInnerHTML={{ __html: block.html }}
+      />
+    )
+  }
+  if (block.kind === 'code') {
+    return (
+      <InteractiveCodeBlock
+        language={block.language}
+        filename={block.filename || undefined}
+        code={block.code}
+        annotations={block.annotations}
+      />
+    )
+  }
+  if (block.kind === 'quote') {
+    return (
+      <blockquote className="border-l-2 border-primary/50 pl-5 py-1 text-[15px] text-foreground/80 italic">
+        &ldquo;{block.content}&rdquo;
+        {block.attribution && (
+          <footer className="mt-1 text-xs text-muted-foreground not-italic">{block.attribution}</footer>
+        )}
+      </blockquote>
+    )
+  }
+  if (block.kind === 'image') {
+    return <SignedImage path={block.storage_path} alt={block.alt} />
+  }
+  return null
+}
+
+// ── Root component ────────────────────────────────────────────────────────────
 
 export function DevLabSection() {
-  const [view, setView] = useState<View>({ kind: "categories" })
-  const [userPosts, setUserPosts] = useState<Record<string, Post[]>>({})
+  const [view, setView] = useState<View>({ kind: 'categories' })
+  const [categories, setCategories] = useState<DevLabCategory[]>([])
+  const [posts, setPosts] = useState<DevLabPost[]>([])
+  const [postCounts, setPostCounts] = useState<Record<string, number>>({})
+  const [loadingCats, setLoadingCats] = useState(true)
+  const [loadingPosts, setLoadingPosts] = useState(false)
+  const [catFormOpen, setCatFormOpen] = useState(false)
+  const [editingCat, setEditingCat] = useState<DevLabCategory | null>(null)
 
-  const getCategory = (id: string): Category => {
-    const base = CATEGORIES.find((c) => c.id === id)!
-    const extra = userPosts[id] ?? []
-    return { ...base, posts: [...extra, ...base.posts] }
+  // Load categories on mount
+  useEffect(() => {
+    listDevLabCategories()
+      .then(async (cats) => {
+        setCategories(cats)
+        // Load post counts in parallel
+        const counts = await Promise.all(
+          cats.map((c) => listDevLabPosts(c.id).then((p) => ({ id: c.id, count: p.length }))),
+        )
+        setPostCounts(Object.fromEntries(counts.map(({ id, count }) => [id, count])))
+      })
+      .catch(() => toast.error('Failed to load categories'))
+      .finally(() => setLoadingCats(false))
+  }, [])
+
+  // Load posts when entering a category
+  useEffect(() => {
+    if (view.kind !== 'posts') return
+    setLoadingPosts(true)
+    listDevLabPosts(view.categoryId)
+      .then(setPosts)
+      .catch(() => toast.error('Failed to load posts'))
+      .finally(() => setLoadingPosts(false))
+  }, [view.kind === 'posts' ? view.categoryId : null])
+
+  // ── Category CRUD ──────────────────────────────────────────────────────────
+
+  async function handleCreateCategory(payload: Parameters<typeof createDevLabCategory>[0]) {
+    const cat = await createDevLabCategory(payload)
+    setCategories((prev) => [...prev, cat])
+    setPostCounts((prev) => ({ ...prev, [cat.id]: 0 }))
+    toast.success('Category created')
   }
 
-  const getPost = (categoryId: string, postId: string) =>
-    getCategory(categoryId).posts.find((p) => p.id === postId)!
+  async function handleUpdateCategory(payload: Parameters<typeof updateDevLabCategory>[1]) {
+    if (!editingCat) return
+    await updateDevLabCategory(editingCat.id, payload)
+    setCategories((prev) => prev.map((c) => (c.id === editingCat.id ? { ...c, ...payload } : c)))
+    setEditingCat(null)
+    toast.success('Category updated')
+  }
 
-  const handleSave = (categoryId: string, draft: DraftPost) => {
-    const newPost: Post = {
-      id: `user-${Date.now()}`,
-      title: draft.title,
-      excerpt: draft.excerpt || "No excerpt provided.",
-      date: new Date().toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }),
-      readingTime: `${Math.max(1, Math.round(
-        draft.blocks.reduce((acc, b) => {
-          if (b.kind === "text") return acc + b.content.split(/\s+/).length
-          if (b.kind === "code") return acc + b.code.split("\n").length * 2
-          return acc + 20
-        }, 0) / 200,
-      ))} min`,
-      tags: draft.tags,
-      replies: 0,
-      blocks: draft.blocks,
+  async function handleDeleteCategory(cat: DevLabCategory) {
+    try {
+      await deleteDevLabCategory(cat.id)
+      setCategories((prev) => prev.filter((c) => c.id !== cat.id))
+      toast.success('Category deleted')
+    } catch {
+      toast.error('Failed to delete category')
     }
-    setUserPosts((prev) => ({
-      ...prev,
-      [categoryId]: [newPost, ...(prev[categoryId] ?? [])],
-    }))
-    setView({ kind: "posts", categoryId })
   }
 
-  return (
-    <div className="min-h-screen">
-      {view.kind === "categories" && (
-        <CategoryGrid onSelect={(id) => setView({ kind: "posts", categoryId: id })} />
-      )}
+  // ── Post CRUD ──────────────────────────────────────────────────────────────
 
-      {view.kind === "posts" && (
+  function computeReadingTime(blocks: DevLabBlock[]): string {
+    const words = blocks.reduce((acc, b) => {
+      if (b.kind === 'text') return acc + b.html.replace(/<[^>]+>/g, ' ').split(/\s+/).filter(Boolean).length
+      if (b.kind === 'code') return acc + b.code.split('\n').length * 2
+      return acc + 20
+    }, 0)
+    return `${Math.max(1, Math.round(words / 200))} min`
+  }
+
+  async function handleSavePost(draft: PostDraft) {
+    const categoryId = view.kind === 'editor' ? view.categoryId : null
+    const payload = {
+      category_id: draft.category_id,
+      title: draft.title,
+      excerpt: draft.excerpt || null,
+      blocks: draft.blocks,
+      tags: draft.tags,
+      pinned: false,
+      reading_time: computeReadingTime(draft.blocks),
+    }
+
+    if (view.kind === 'editor' && view.editPost) {
+      // Update
+      await updateDevLabPost(view.editPost.id, payload)
+      setPosts((prev) => prev.map((p) => p.id === view.editPost!.id ? { ...p, ...payload } : p))
+      toast.success('Post updated')
+      setView({ kind: 'posts', categoryId: categoryId! })
+    } else {
+      // Create
+      const post = await createDevLabPost(payload)
+      setPosts((prev) => [post, ...prev])
+      setPostCounts((prev) => ({ ...prev, [categoryId!]: (prev[categoryId!] ?? 0) + 1 }))
+      toast.success('Post published')
+      setView({ kind: 'posts', categoryId: categoryId! })
+    }
+  }
+
+  async function handleDeletePost(post: DevLabPost) {
+    try {
+      await deleteDevLabPost(post.id)
+      setPosts((prev) => prev.filter((p) => p.id !== post.id))
+      const catId = view.kind === 'post' ? view.categoryId : (view.kind === 'posts' ? view.categoryId : null)
+      if (catId) setPostCounts((prev) => ({ ...prev, [catId]: Math.max(0, (prev[catId] ?? 1) - 1) }))
+      toast.success('Post deleted')
+      if (view.kind === 'post') setView({ kind: 'posts', categoryId: view.categoryId })
+    } catch {
+      toast.error('Failed to delete post')
+    }
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  function getCat(id: string) {
+    return categories.find((c) => c.id === id)
+  }
+
+  function getPost(id: string) {
+    return posts.find((p) => p.id === id)
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
+  if (loadingCats) {
+    return (
+      <div className="flex items-center gap-2 px-6 py-16 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" />
+        Loading…
+      </div>
+    )
+  }
+
+  if (view.kind === 'categories') {
+    return (
+      <>
+        <CategoryGrid
+          categories={categories}
+          postCounts={postCounts}
+          onSelect={(id) => setView({ kind: 'posts', categoryId: id })}
+          onEdit={(cat) => { setEditingCat(cat); setCatFormOpen(true) }}
+          onDelete={handleDeleteCategory}
+          onNew={() => { setEditingCat(null); setCatFormOpen(true) }}
+        />
+        <CategoryForm
+          open={catFormOpen}
+          onOpenChange={(v) => { setCatFormOpen(v); if (!v) setEditingCat(null) }}
+          initial={editingCat}
+          onSubmit={editingCat ? handleUpdateCategory : handleCreateCategory}
+        />
+      </>
+    )
+  }
+
+  if (view.kind === 'posts') {
+    const cat = getCat(view.categoryId)
+    if (!cat) return null
+    return (
+      <>
         <PostList
-          category={getCategory(view.categoryId)}
-          onSelect={(postId) =>
-            setView({ kind: "post", categoryId: view.categoryId, postId })
-          }
-          onBack={() => setView({ kind: "categories" })}
-          onNewPost={() => setView({ kind: "editor", categoryId: view.categoryId })}
+          category={cat}
+          posts={posts}
+          loading={loadingPosts}
+          onSelect={(postId) => setView({ kind: 'post', categoryId: view.categoryId, postId })}
+          onEdit={(post) => setView({ kind: 'editor', categoryId: view.categoryId, editPost: post })}
+          onDelete={handleDeletePost}
+          onBack={() => setView({ kind: 'categories' })}
+          onNewPost={() => setView({ kind: 'editor', categoryId: view.categoryId })}
         />
-      )}
+        <CategoryForm
+          open={catFormOpen}
+          onOpenChange={(v) => { setCatFormOpen(v); if (!v) setEditingCat(null) }}
+          initial={editingCat}
+          onSubmit={editingCat ? handleUpdateCategory : handleCreateCategory}
+        />
+      </>
+    )
+  }
 
-      {view.kind === "post" && (
-        <PostView
-          category={getCategory(view.categoryId)}
-          post={getPost(view.categoryId, view.postId)}
-          onBack={() =>
-            setView({ kind: "posts", categoryId: view.categoryId })
-          }
-        />
-      )}
+  if (view.kind === 'post') {
+    const cat = getCat(view.categoryId)
+    const post = getPost(view.postId)
+    if (!cat || !post) return null
+    return (
+      <PostView
+        category={cat}
+        post={post}
+        onBack={() => setView({ kind: 'posts', categoryId: view.categoryId })}
+        onEdit={() => setView({ kind: 'editor', categoryId: view.categoryId, editPost: post })}
+        onDelete={() => handleDeletePost(post)}
+      />
+    )
+  }
 
-      {view.kind === "editor" && (
-        <DevLabPostEditor
-          categoryLabel={getCategory(view.categoryId).label}
-          onSave={(draft) => handleSave(view.categoryId, draft)}
-          onCancel={() => setView({ kind: "posts", categoryId: view.categoryId })}
-        />
-      )}
-    </div>
-  )
+  if (view.kind === 'editor') {
+    const cat = getCat(view.categoryId)
+    if (!cat) return null
+    return (
+      <DevLabPostEditor
+        categoryLabel={cat.label}
+        categoryId={view.categoryId}
+        initial={view.editPost}
+        onSave={handleSavePost}
+        onCancel={() => setView({ kind: 'posts', categoryId: view.categoryId })}
+      />
+    )
+  }
+
+  return null
 }

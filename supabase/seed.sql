@@ -116,5 +116,17 @@ BEGIN
      ARRAY['summary','neutral'])
   ON CONFLICT DO NOTHING;
 
+  -- -----------------------------------------------------------------------
+  -- DevLab categories (6 initial)
+  -- -----------------------------------------------------------------------
+  INSERT INTO devlab_categories (user_id, slug, label, description, icon) VALUES
+    (uid, 'compilers',    'Compilers',    'Lexing, parsing, IR lowering, and code generation.',              'Cpu'),
+    (uid, 'networks',     'Networks',     'TCP, TLS, HTTP semantics and everything below the fold.',         'Network'),
+    (uid, 'architecture', 'Architecture', 'Distributed systems, boundaries, and failure modes.',             'Layers'),
+    (uid, 'databases',    'Databases',    'Storage engines, indexes, and query planning.',                   'Database'),
+    (uid, 'systems',      'Systems',      'OS internals, memory models, and concurrency primitives.',        'Boxes'),
+    (uid, 'tooling',      'Tooling',      'Build systems, profilers, and developer ergonomics.',             'Terminal')
+  ON CONFLICT DO NOTHING;
+
   RAISE NOTICE 'Seed complete for user %', uid;
 END $$;

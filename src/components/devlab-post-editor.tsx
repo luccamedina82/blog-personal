@@ -1,339 +1,223 @@
-import { useState, useRef } from "react"
-import { cn } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { useState, useRef } from 'react'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { TiptapEditor } from '@/components/devlab/tiptap-editor'
+import { supabase } from '@/lib/supabase'
 import {
-  X,
-  Plus,
-  Trash2,
-  Code2,
-  Quote,
-  AlignLeft,
-  GripVertical,
-  ChevronDown,
-  ChevronUp,
-  Tag,
-  Info,
-} from "lucide-react"
+  X, Plus, Trash2, Code2, Quote, AlignLeft, Image,
+  GripVertical, ChevronDown, ChevronUp, Tag, Info,
+  ArrowUp, ArrowDown, Loader2,
+} from 'lucide-react'
+import type { DevLabBlock, CodeAnnotation, DevLabPost, PostDraft } from '@/lib/devlab/types'
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export interface DraftAnnotation {
-  line: number
-  title: string
-  body: string
-}
-
-export type DraftBlock =
-  | { id: string; kind: "text"; content: string }
-  | {
-      id: string
-      kind: "code"
-      filename: string
-      language: string
-      code: string
-      annotations: DraftAnnotation[]
-    }
-  | { id: string; kind: "quote"; content: string; attribution: string }
-
-export interface DraftPost {
-  title: string
-  excerpt: string
-  tags: string[]
-  blocks: DraftBlock[]
-}
-
-interface DevLabPostEditorProps {
-  categoryLabel: string
-  onSave: (draft: DraftPost) => void
-  onCancel: () => void
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+// Re-export types consumed by devlab-section
+export type { DevLabBlock, PostDraft }
+export type { CodeAnnotation as DraftAnnotation }
 
 function uid() {
   return Math.random().toString(36).slice(2, 9)
 }
 
-// ---------------------------------------------------------------------------
-// Block sub-editors
-// ---------------------------------------------------------------------------
+// ── Text block ───────────────────────────────────────────────────────────────
 
 function TextBlockEditor({
   block,
   onChange,
   onRemove,
+  onMove,
+  isFirst,
+  isLast,
 }: {
-  block: Extract<DraftBlock, { kind: "text" }>
-  onChange: (b: Extract<DraftBlock, { kind: "text" }>) => void
+  block: Extract<DevLabBlock, { kind: 'text' }>
+  onChange: (b: Extract<DevLabBlock, { kind: 'text' }>) => void
   onRemove: () => void
+  onMove: (dir: 'up' | 'down') => void
+  isFirst: boolean
+  isLast: boolean
 }) {
   return (
     <div className="group relative flex gap-2">
-      <GripHandle />
+      <MoveHandle onMove={onMove} isFirst={isFirst} isLast={isLast} />
       <div className="flex-1 rounded-md border border-border/60 bg-card/40 overflow-hidden">
-        <div className="flex items-center justify-between px-3 py-2 border-b border-border/50 bg-background/30">
-          <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            <AlignLeft className="size-3" />
-            Text
-          </span>
-          <button
-            type="button"
-            onClick={onRemove}
-            className="text-muted-foreground/50 hover:text-destructive transition-colors"
-            aria-label="Remove block"
-          >
-            <Trash2 className="size-3.5" />
-          </button>
-        </div>
-        <textarea
-          value={block.content}
-          onChange={(e) => onChange({ ...block, content: e.target.value })}
-          placeholder="Write your paragraph here..."
-          rows={4}
-          className="w-full bg-transparent px-3 py-3 text-sm text-foreground/85 placeholder:text-muted-foreground/40 leading-relaxed resize-y outline-none font-sans"
+        <BlockHeader icon={<AlignLeft className="size-3" />} label="Text" onRemove={onRemove} />
+        <TiptapEditor
+          value={block.html}
+          onChange={(html) => onChange({ ...block, html })}
+          placeholder="Write your paragraph here…"
         />
       </div>
     </div>
   )
 }
 
+// ── Code block ───────────────────────────────────────────────────────────────
+
 function CodeBlockEditor({
   block,
   onChange,
   onRemove,
+  onMove,
+  isFirst,
+  isLast,
 }: {
-  block: Extract<DraftBlock, { kind: "code" }>
-  onChange: (b: Extract<DraftBlock, { kind: "code" }>) => void
+  block: Extract<DevLabBlock, { kind: 'code' }>
+  onChange: (b: Extract<DevLabBlock, { kind: 'code' }>) => void
   onRemove: () => void
+  onMove: (dir: 'up' | 'down') => void
+  isFirst: boolean
+  isLast: boolean
 }) {
-  const [newAnnotation, setNewAnnotation] = useState<DraftAnnotation>({
-    line: 1,
-    title: "",
-    body: "",
-  })
-  const [showAnnotationForm, setShowAnnotationForm] = useState(false)
+  const [newAnn, setNewAnn] = useState<CodeAnnotation>({ line: 1, title: '', body: '' })
+  const [showAnnForm, setShowAnnForm] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
 
-  const addAnnotation = () => {
-    if (!newAnnotation.title.trim()) return
-    onChange({
-      ...block,
-      annotations: [...block.annotations, { ...newAnnotation }],
-    })
-    setNewAnnotation({ line: 1, title: "", body: "" })
-    setShowAnnotationForm(false)
-  }
-
-  const removeAnnotation = (idx: number) => {
-    onChange({
-      ...block,
-      annotations: block.annotations.filter((_, i) => i !== idx),
-    })
+  function addAnnotation() {
+    if (!newAnn.title.trim()) return
+    onChange({ ...block, annotations: [...block.annotations, { ...newAnn }] })
+    setNewAnn({ line: 1, title: '', body: '' })
+    setShowAnnForm(false)
   }
 
   return (
     <div className="group relative flex gap-2">
-      <GripHandle />
+      <MoveHandle onMove={onMove} isFirst={isFirst} isLast={isLast} />
       <div className="flex-1 rounded-md border border-border/60 bg-card/40 overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between px-3 py-2 border-b border-border/50 bg-background/30">
           <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
             <Code2 className="size-3" />
             Code
           </span>
-          <button
-            type="button"
-            onClick={onRemove}
-            className="text-muted-foreground/50 hover:text-destructive transition-colors"
-            aria-label="Remove block"
-          >
-            <Trash2 className="size-3.5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCollapsed((v) => !v)}
+              className="flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+            >
+              {collapsed ? <ChevronDown className="size-3" /> : <ChevronUp className="size-3" />}
+              {collapsed ? 'Expand' : 'Collapse'}
+            </button>
+            <button type="button" onClick={onRemove} className="text-muted-foreground/50 hover:text-destructive transition-colors">
+              <Trash2 className="size-3.5" />
+            </button>
+          </div>
         </div>
 
-        <div className="p-3 space-y-3">
-          {/* Meta row */}
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={block.filename}
-              onChange={(e) => onChange({ ...block, filename: e.target.value })}
-              placeholder="filename.ts"
-              className="flex-1 h-8 rounded-md border border-border/60 bg-background/40 px-2.5 text-xs font-mono text-foreground/80 placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 transition-colors"
-            />
-            <input
-              type="text"
-              value={block.language}
-              onChange={(e) => onChange({ ...block, language: e.target.value })}
-              placeholder="ts"
-              className="w-16 h-8 rounded-md border border-border/60 bg-background/40 px-2.5 text-xs font-mono text-muted-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 transition-colors"
-            />
-          </div>
-
-          {/* Code textarea */}
-          <textarea
-            value={block.code}
-            onChange={(e) => onChange({ ...block, code: e.target.value })}
-            placeholder={"// Paste your code here...\nconst hello = 'world'"}
-            rows={8}
-            spellCheck={false}
-            className="w-full rounded-md border border-border/60 bg-[hsl(var(--background)/0.6)] px-3 py-2.5 text-[12.5px] font-mono text-foreground/85 placeholder:text-muted-foreground/30 leading-6 resize-y outline-none focus:border-primary/30 transition-colors"
-          />
-
-          {/* Annotations */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                <Info className="size-3" />
-                Annotations ({block.annotations.length})
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowAnnotationForm((v) => !v)}
-                className="flex items-center gap-1 text-[10px] text-primary hover:text-primary/80 transition-colors"
-              >
-                <Plus className="size-3" />
-                Add note
-              </button>
+        {!collapsed && (
+          <div className="p-3 space-y-3">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={block.filename}
+                onChange={(e) => onChange({ ...block, filename: e.target.value })}
+                placeholder="filename.ts"
+                className="flex-1 h-8 rounded-md border border-border/60 bg-background/40 px-2.5 text-xs font-mono text-foreground/80 placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 transition-colors"
+              />
+              <input
+                type="text"
+                value={block.language}
+                onChange={(e) => onChange({ ...block, language: e.target.value })}
+                placeholder="ts"
+                className="w-16 h-8 rounded-md border border-border/60 bg-background/40 px-2.5 text-xs font-mono text-muted-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 transition-colors"
+              />
             </div>
-
-            {block.annotations.map((ann, idx) => (
-              <div
-                key={idx}
-                className="flex items-start gap-2 rounded-md bg-secondary/30 border border-border/50 px-3 py-2"
-              >
-                <span className="font-mono text-[10px] text-muted-foreground/60 tabular-nums shrink-0 mt-0.5">
-                  L{ann.line.toString().padStart(2, "0")}
+            <textarea
+              value={block.code}
+              onChange={(e) => onChange({ ...block, code: e.target.value })}
+              placeholder={'// Paste your code here…'}
+              rows={8}
+              spellCheck={false}
+              className="w-full rounded-md border border-border/60 bg-background/60 px-3 py-2.5 text-[12.5px] font-mono text-foreground/85 placeholder:text-muted-foreground/30 leading-6 resize-y outline-none focus:border-primary/30 transition-colors"
+            />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                  <Info className="size-3" />
+                  Annotations ({block.annotations.length})
                 </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-foreground truncate">
-                    {ann.title}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2 mt-0.5">
-                    {ann.body}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeAnnotation(idx)}
-                  className="text-muted-foreground/40 hover:text-destructive transition-colors shrink-0"
-                >
-                  <X className="size-3" />
+                <button type="button" onClick={() => setShowAnnForm((v) => !v)} className="flex items-center gap-1 text-[10px] text-primary hover:text-primary/80 transition-colors">
+                  <Plus className="size-3" />
+                  Add note
                 </button>
               </div>
-            ))}
-
-            {showAnnotationForm && (
-              <div className="rounded-md border border-primary/25 bg-card/50 p-3 space-y-2">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-primary">
-                  New annotation
-                </p>
-                <div className="flex gap-2">
-                  <div className="flex flex-col gap-1 w-16">
-                    <label className="text-[10px] text-muted-foreground">
-                      Line
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={newAnnotation.line}
-                      onChange={(e) =>
-                        setNewAnnotation((p) => ({
-                          ...p,
-                          line: Number(e.target.value),
-                        }))
-                      }
-                      className="h-8 rounded-md border border-border/60 bg-background/40 px-2 text-xs font-mono text-foreground/80 outline-none focus:border-primary/40 transition-colors text-center"
-                    />
+              {block.annotations.map((ann, idx) => (
+                <div key={idx} className="flex items-start gap-2 rounded-md bg-secondary/30 border border-border/50 px-3 py-2">
+                  <span className="font-mono text-[10px] text-muted-foreground/60 tabular-nums shrink-0 mt-0.5">
+                    L{ann.line.toString().padStart(2, '0')}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-foreground truncate">{ann.title}</p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2 mt-0.5">{ann.body}</p>
                   </div>
-                  <div className="flex flex-col gap-1 flex-1">
-                    <label className="text-[10px] text-muted-foreground">
-                      Title
-                    </label>
-                    <input
-                      type="text"
-                      value={newAnnotation.title}
-                      onChange={(e) =>
-                        setNewAnnotation((p) => ({
-                          ...p,
-                          title: e.target.value,
-                        }))
-                      }
-                      placeholder="Short title for this note"
-                      className="h-8 rounded-md border border-border/60 bg-background/40 px-2.5 text-xs text-foreground/80 placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 transition-colors"
-                    />
-                  </div>
-                </div>
-                <textarea
-                  value={newAnnotation.body}
-                  onChange={(e) =>
-                    setNewAnnotation((p) => ({ ...p, body: e.target.value }))
-                  }
-                  placeholder="Explain why this line is interesting..."
-                  rows={3}
-                  className="w-full rounded-md border border-border/60 bg-background/40 px-2.5 py-2 text-xs text-foreground/80 placeholder:text-muted-foreground/40 leading-relaxed outline-none focus:border-primary/40 transition-colors resize-none"
-                />
-                <div className="flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowAnnotationForm(false)}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={addAnnotation}
-                    className="text-xs text-primary hover:text-primary/80 transition-colors font-medium"
-                  >
-                    Add annotation
+                  <button type="button" onClick={() => onChange({ ...block, annotations: block.annotations.filter((_, i) => i !== idx) })} className="text-muted-foreground/40 hover:text-destructive transition-colors shrink-0">
+                    <X className="size-3" />
                   </button>
                 </div>
-              </div>
-            )}
+              ))}
+              {showAnnForm && (
+                <div className="rounded-md border border-primary/25 bg-card/50 p-3 space-y-2">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-primary">New annotation</p>
+                  <div className="flex gap-2">
+                    <div className="flex flex-col gap-1 w-16">
+                      <label className="text-[10px] text-muted-foreground">Line</label>
+                      <input type="number" min={1} value={newAnn.line} onChange={(e) => setNewAnn((p) => ({ ...p, line: Number(e.target.value) }))}
+                        className="h-8 rounded-md border border-border/60 bg-background/40 px-2 text-xs font-mono text-foreground/80 outline-none focus:border-primary/40 transition-colors text-center" />
+                    </div>
+                    <div className="flex flex-col gap-1 flex-1">
+                      <label className="text-[10px] text-muted-foreground">Title</label>
+                      <input type="text" value={newAnn.title} onChange={(e) => setNewAnn((p) => ({ ...p, title: e.target.value }))} placeholder="Short title"
+                        className="h-8 rounded-md border border-border/60 bg-background/40 px-2.5 text-xs text-foreground/80 placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 transition-colors" />
+                    </div>
+                  </div>
+                  <textarea value={newAnn.body} onChange={(e) => setNewAnn((p) => ({ ...p, body: e.target.value }))} placeholder="Explain why this line is interesting…" rows={3}
+                    className="w-full rounded-md border border-border/60 bg-background/40 px-2.5 py-2 text-xs text-foreground/80 placeholder:text-muted-foreground/40 leading-relaxed outline-none focus:border-primary/40 transition-colors resize-none" />
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={() => setShowAnnForm(false)} className="text-xs text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+                    <button type="button" onClick={addAnnotation} className="text-xs text-primary hover:text-primary/80 transition-colors font-medium">Add annotation</button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
+
+        {collapsed && (
+          <div className="px-3 py-2 flex items-center gap-2">
+            <Code2 className="size-3.5 text-muted-foreground/50" />
+            <span className="text-xs text-muted-foreground truncate font-mono">{block.filename || 'code block'}</span>
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
+// ── Quote block ───────────────────────────────────────────────────────────────
+
 function QuoteBlockEditor({
   block,
   onChange,
   onRemove,
+  onMove,
+  isFirst,
+  isLast,
 }: {
-  block: Extract<DraftBlock, { kind: "quote" }>
-  onChange: (b: Extract<DraftBlock, { kind: "quote" }>) => void
+  block: Extract<DevLabBlock, { kind: 'quote' }>
+  onChange: (b: Extract<DevLabBlock, { kind: 'quote' }>) => void
   onRemove: () => void
+  onMove: (dir: 'up' | 'down') => void
+  isFirst: boolean
+  isLast: boolean
 }) {
   return (
     <div className="group relative flex gap-2">
-      <GripHandle />
+      <MoveHandle onMove={onMove} isFirst={isFirst} isLast={isLast} />
       <div className="flex-1 rounded-md border border-border/60 bg-card/40 overflow-hidden">
-        <div className="flex items-center justify-between px-3 py-2 border-b border-border/50 bg-background/30">
-          <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            <Quote className="size-3" />
-            Quote
-          </span>
-          <button
-            type="button"
-            onClick={onRemove}
-            className="text-muted-foreground/50 hover:text-destructive transition-colors"
-            aria-label="Remove block"
-          >
-            <Trash2 className="size-3.5" />
-          </button>
-        </div>
+        <BlockHeader icon={<Quote className="size-3" />} label="Quote" onRemove={onRemove} />
         <div className="p-3 space-y-2">
           <textarea
             value={block.content}
             onChange={(e) => onChange({ ...block, content: e.target.value })}
-            placeholder='"The real problem is that programmers have spent far too much time worrying about efficiency in the wrong places..."'
+            placeholder='"The real problem is that programmers have spent far too much time worrying about efficiency..."'
             rows={3}
             className="w-full bg-transparent px-3 py-2 text-[14px] text-foreground/80 placeholder:text-muted-foreground/40 leading-relaxed resize-none outline-none italic font-sans border border-border/50 rounded-md border-l-2 border-l-primary/40"
           />
@@ -350,109 +234,201 @@ function QuoteBlockEditor({
   )
 }
 
-function GripHandle() {
+// ── Image block ───────────────────────────────────────────────────────────────
+
+function ImageBlockEditor({
+  block,
+  onChange,
+  onRemove,
+  onMove,
+  isFirst,
+  isLast,
+}: {
+  block: Extract<DevLabBlock, { kind: 'image' }>
+  onChange: (b: Extract<DevLabBlock, { kind: 'image' }>) => void
+  onRemove: () => void
+  onMove: (dir: 'up' | 'down') => void
+  isFirst: boolean
+  isLast: boolean
+}) {
+  const [uploading, setUploading] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  async function handleFile(file: File) {
+    setPreviewUrl(URL.createObjectURL(file))
+    setUploading(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+      const ext = file.name.split('.').pop() ?? 'jpg'
+      const path = `${user.id}/devlab/${Date.now()}-${uid()}.${ext}`
+      const { error } = await supabase.storage.from('media').upload(path, file)
+      if (error) throw error
+      onChange({ ...block, storage_path: path })
+    } catch {
+      setPreviewUrl(null)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault()
+    const file = e.dataTransfer.files[0]
+    if (file?.type.startsWith('image/')) handleFile(file)
+  }
+
   return (
-    <div className="flex items-start pt-3 opacity-30 hover:opacity-60 transition-opacity cursor-grab">
-      <GripVertical className="size-3.5 text-muted-foreground" />
+    <div className="group relative flex gap-2">
+      <MoveHandle onMove={onMove} isFirst={isFirst} isLast={isLast} />
+      <div className="flex-1 rounded-md border border-border/60 bg-card/40 overflow-hidden">
+        <BlockHeader icon={<Image className="size-3" />} label="Image" onRemove={onRemove} />
+        <div className="p-3 space-y-2">
+          {previewUrl || block.storage_path ? (
+            <div className="relative rounded-md overflow-hidden bg-secondary/30 border border-border/50">
+              {previewUrl && (
+                <img src={previewUrl} alt={block.alt || 'preview'} className="max-h-64 w-full object-contain" />
+              )}
+              {uploading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-background/60">
+                  <Loader2 className="size-5 animate-spin text-primary" />
+                </div>
+              )}
+              {!uploading && block.storage_path && (
+                <p className="text-[10px] text-muted-foreground/60 px-2 py-1 font-mono truncate">{block.storage_path}</p>
+              )}
+            </div>
+          ) : (
+            <div
+              onDrop={onDrop}
+              onDragOver={(e) => e.preventDefault()}
+              onClick={() => inputRef.current?.click()}
+              className="flex flex-col items-center justify-center gap-2 h-32 rounded-md border border-dashed border-border/60 bg-secondary/20 hover:bg-secondary/30 cursor-pointer transition-colors"
+            >
+              <Image className="size-6 text-muted-foreground/40" />
+              <p className="text-xs text-muted-foreground/60">Drop image or click to upload</p>
+            </div>
+          )}
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f) }}
+          />
+          <input
+            type="text"
+            value={block.alt}
+            onChange={(e) => onChange({ ...block, alt: e.target.value })}
+            placeholder="Alt text (for accessibility)"
+            className="w-full h-8 rounded-md border border-border/60 bg-background/40 px-2.5 text-xs text-muted-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 transition-colors"
+          />
+          {block.storage_path && !previewUrl && (
+            <button type="button" onClick={() => inputRef.current?.click()} className="text-[11px] text-primary hover:text-primary/80 transition-colors">
+              Replace image
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Tag input
-// ---------------------------------------------------------------------------
+// ── Shared block UI ───────────────────────────────────────────────────────────
 
-function TagInput({
-  tags,
-  onChange,
-}: {
-  tags: string[]
-  onChange: (t: string[]) => void
-}) {
-  const [input, setInput] = useState("")
+function BlockHeader({ icon, label, onRemove }: { icon: React.ReactNode; label: string; onRemove: () => void }) {
+  return (
+    <div className="flex items-center justify-between px-3 py-2 border-b border-border/50 bg-background/30">
+      <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+        {icon}
+        {label}
+      </span>
+      <button type="button" onClick={onRemove} className="text-muted-foreground/50 hover:text-destructive transition-colors">
+        <Trash2 className="size-3.5" />
+      </button>
+    </div>
+  )
+}
+
+function MoveHandle({ onMove, isFirst, isLast }: { onMove: (d: 'up' | 'down') => void; isFirst: boolean; isLast: boolean }) {
+  return (
+    <div className="flex flex-col items-center pt-1.5 gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+      <button
+        type="button"
+        disabled={isFirst}
+        onClick={() => onMove('up')}
+        className="flex items-center justify-center size-5 rounded text-muted-foreground/50 hover:text-foreground hover:bg-secondary disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+        title="Move up"
+      >
+        <ArrowUp className="size-3" />
+      </button>
+      <GripVertical className="size-3.5 text-muted-foreground/25" />
+      <button
+        type="button"
+        disabled={isLast}
+        onClick={() => onMove('down')}
+        className="flex items-center justify-center size-5 rounded text-muted-foreground/50 hover:text-foreground hover:bg-secondary disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+        title="Move down"
+      >
+        <ArrowDown className="size-3" />
+      </button>
+    </div>
+  )
+}
+
+// ── Tag input ─────────────────────────────────────────────────────────────────
+
+function TagInput({ tags, onChange }: { tags: string[]; onChange: (t: string[]) => void }) {
+  const [input, setInput] = useState('')
   const ref = useRef<HTMLInputElement>(null)
 
-  const commit = () => {
-    const val = input.trim().replace(/^#/, "")
-    if (!val || tags.includes(val)) {
-      setInput("")
-      return
-    }
+  function commit() {
+    const val = input.trim().replace(/^#/, '')
+    if (!val || tags.includes(val)) { setInput(''); return }
     onChange([...tags, val])
-    setInput("")
+    setInput('')
   }
 
-  const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault()
-      commit()
-    }
-    if (e.key === "Backspace" && !input && tags.length > 0) {
-      onChange(tags.slice(0, -1))
-    }
+  function handleKey(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commit() }
+    if (e.key === 'Backspace' && !input && tags.length > 0) onChange(tags.slice(0, -1))
   }
 
   return (
-    <div
-      className="flex flex-wrap gap-1.5 items-center min-h-9 w-full rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5 cursor-text"
-      onClick={() => ref.current?.focus()}
-    >
+    <div className="flex flex-wrap gap-1.5 items-center min-h-9 w-full rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5 cursor-text" onClick={() => ref.current?.focus()}>
       <Tag className="size-3 text-muted-foreground/50 shrink-0" />
       {tags.map((t) => (
-        <Badge
-          key={t}
-          variant="secondary"
-          className="rounded-sm text-[10px] font-mono font-normal bg-secondary/50 border border-border/60 h-5 px-1.5 flex items-center gap-1"
-        >
+        <Badge key={t} variant="secondary" className="rounded-sm text-[10px] font-mono font-normal bg-secondary/50 border border-border/60 h-5 px-1.5 flex items-center gap-1">
           {t}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onChange(tags.filter((x) => x !== t))
-            }}
-            className="text-muted-foreground/60 hover:text-foreground transition-colors"
-          >
+          <button type="button" onClick={(e) => { e.stopPropagation(); onChange(tags.filter((x) => x !== t)) }} className="text-muted-foreground/60 hover:text-foreground transition-colors">
             <X className="size-2.5" />
           </button>
         </Badge>
       ))}
-      <input
-        ref={ref}
-        type="text"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={handleKey}
-        onBlur={commit}
-        placeholder={tags.length === 0 ? "Add tags (Enter to confirm)..." : ""}
-        className="flex-1 min-w-[120px] h-5 bg-transparent text-xs text-foreground/80 placeholder:text-muted-foreground/40 outline-none"
-      />
+      <input ref={ref} type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKey} onBlur={commit}
+        placeholder={tags.length === 0 ? 'Add tags (Enter to confirm)…' : ''}
+        className="flex-1 min-w-[120px] h-5 bg-transparent text-xs text-foreground/80 placeholder:text-muted-foreground/40 outline-none" />
     </div>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Add block toolbar
-// ---------------------------------------------------------------------------
+// ── Add block toolbar ─────────────────────────────────────────────────────────
 
-function AddBlockToolbar({ onAdd }: { onAdd: (kind: DraftBlock["kind"]) => void }) {
+function AddBlockToolbar({ onAdd }: { onAdd: (kind: DevLabBlock['kind']) => void }) {
+  const items = [
+    { kind: 'text' as const, icon: AlignLeft, label: 'Text' },
+    { kind: 'code' as const, icon: Code2, label: 'Code' },
+    { kind: 'quote' as const, icon: Quote, label: 'Quote' },
+    { kind: 'image' as const, icon: Image, label: 'Image' },
+  ]
   return (
     <div className="flex items-center gap-2 pt-1">
-      <span className="text-[10px] text-muted-foreground/50 uppercase tracking-[0.18em]">
-        Add block
-      </span>
+      <span className="text-[10px] text-muted-foreground/50 uppercase tracking-[0.18em]">Add block</span>
       <div className="flex gap-1.5">
-        {[
-          { kind: "text" as const, icon: AlignLeft, label: "Text" },
-          { kind: "code" as const, icon: Code2, label: "Code" },
-          { kind: "quote" as const, icon: Quote, label: "Quote" },
-        ].map(({ kind, icon: Icon, label }) => (
-          <button
-            key={kind}
-            type="button"
-            onClick={() => onAdd(kind)}
-            className="flex items-center gap-1.5 rounded-md border border-border/60 bg-card/40 hover:bg-card/80 hover:border-primary/30 px-2.5 py-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-all"
-          >
+        {items.map(({ kind, icon: Icon, label }) => (
+          <button key={kind} type="button" onClick={() => onAdd(kind)}
+            className="flex items-center gap-1.5 rounded-md border border-border/60 bg-card/40 hover:bg-card/80 hover:border-primary/30 px-2.5 py-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-all">
             <Icon className="size-3" />
             {label}
           </button>
@@ -462,203 +438,147 @@ function AddBlockToolbar({ onAdd }: { onAdd: (kind: DraftBlock["kind"]) => void 
   )
 }
 
-// ---------------------------------------------------------------------------
-// Main editor
-// ---------------------------------------------------------------------------
+// ── Main editor ───────────────────────────────────────────────────────────────
 
-export function DevLabPostEditor({
-  categoryLabel,
-  onSave,
-  onCancel,
-}: DevLabPostEditorProps) {
-  const [title, setTitle] = useState("")
-  const [excerpt, setExcerpt] = useState("")
-  const [tags, setTags] = useState<string[]>([])
-  const [blocks, setBlocks] = useState<DraftBlock[]>([
-    { id: uid(), kind: "text", content: "" },
-  ])
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+interface DevLabPostEditorProps {
+  categoryLabel: string
+  categoryId: string | null
+  initial?: DevLabPost
+  onSave: (draft: PostDraft) => Promise<void>
+  onCancel: () => void
+}
 
-  const addBlock = (kind: DraftBlock["kind"]) => {
+export function DevLabPostEditor({ categoryLabel, categoryId, initial, onSave, onCancel }: DevLabPostEditorProps) {
+  const [title, setTitle] = useState(initial?.title ?? '')
+  const [excerpt, setExcerpt] = useState(initial?.excerpt ?? '')
+  const [tags, setTags] = useState<string[]>(initial?.tags ?? [])
+  const [blocks, setBlocks] = useState<DevLabBlock[]>(
+    initial?.blocks?.length ? initial.blocks : [{ id: uid(), kind: 'text', html: '' }],
+  )
+  const [saving, setSaving] = useState(false)
+
+  function addBlock(kind: DevLabBlock['kind']) {
     const id = uid()
-    let block: DraftBlock
-    if (kind === "text") block = { id, kind: "text", content: "" }
-    else if (kind === "code")
-      block = {
-        id,
-        kind: "code",
-        filename: "",
-        language: "ts",
-        code: "",
-        annotations: [],
-      }
-    else block = { id, kind: "quote", content: "", attribution: "" }
+    let block: DevLabBlock
+    if (kind === 'text') block = { id, kind: 'text', html: '' }
+    else if (kind === 'code') block = { id, kind: 'code', filename: '', language: 'ts', code: '', annotations: [] }
+    else if (kind === 'quote') block = { id, kind: 'quote', content: '', attribution: '' }
+    else block = { id, kind: 'image', storage_path: '', alt: '' }
     setBlocks((prev) => [...prev, block])
   }
 
-  const updateBlock = (id: string, updated: DraftBlock) => {
+  function updateBlock(id: string, updated: DevLabBlock) {
     setBlocks((prev) => prev.map((b) => (b.id === id ? updated : b)))
   }
 
-  const removeBlock = (id: string) => {
+  function removeBlock(id: string) {
     setBlocks((prev) => prev.filter((b) => b.id !== id))
   }
 
-  const toggleCollapse = (id: string) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+  function moveBlock(id: string, dir: 'up' | 'down') {
+    setBlocks((prev) => {
+      const idx = prev.findIndex((b) => b.id === id)
+      if (idx === -1) return prev
+      if (dir === 'up' && idx === 0) return prev
+      if (dir === 'down' && idx === prev.length - 1) return prev
+      const next = [...prev]
+      const swapIdx = dir === 'up' ? idx - 1 : idx + 1
+      ;[next[idx], next[swapIdx]] = [next[swapIdx], next[idx]]
       return next
     })
   }
 
-  const canSave = title.trim().length > 0
-
-  const handleSave = () => {
-    if (!canSave) return
-    onSave({ title, excerpt, tags, blocks })
+  async function handleSave() {
+    if (!title.trim()) return
+    setSaving(true)
+    try {
+      await onSave({
+        category_id: categoryId,
+        title: title.trim(),
+        excerpt: excerpt.trim(),
+        tags,
+        blocks,
+      })
+    } finally {
+      setSaving(false)
+    }
   }
+
+  const isEdit = !!initial
 
   return (
     <div className="flex flex-col h-full">
-      {/* Top bar */}
       <div className="flex items-center justify-between px-6 lg:px-14 py-4 border-b border-border/60 bg-background/60 sticky top-0 z-10">
         <div>
           <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-            New post in {categoryLabel}
+            {isEdit ? `Editing · ${categoryLabel}` : `New post in ${categoryLabel}`}
           </p>
-          <p className="text-sm font-medium text-foreground mt-0.5">
-            {title.trim() || "Untitled"}
-          </p>
+          <p className="text-sm font-medium text-foreground mt-0.5">{title.trim() || 'Untitled'}</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="flex items-center gap-1.5 h-8 px-3 rounded-md text-xs text-muted-foreground hover:text-foreground border border-border/60 hover:border-border transition-colors"
-          >
+          <button type="button" onClick={onCancel}
+            className="flex items-center gap-1.5 h-8 px-3 rounded-md text-xs text-muted-foreground hover:text-foreground border border-border/60 hover:border-border transition-colors">
             Cancel
           </button>
-          <Button
-            type="button"
-            onClick={handleSave}
-            disabled={!canSave}
-            size="sm"
-            className="h-8 text-xs"
-          >
-            Publish post
+          <Button type="button" onClick={handleSave} disabled={saving || !title.trim()} size="sm" className="h-8 text-xs">
+            {saving ? <><Loader2 className="size-3 animate-spin" /> Saving…</> : isEdit ? 'Save changes' : 'Publish post'}
           </Button>
         </div>
       </div>
 
-      {/* Scrollable editor body */}
       <div className="flex-1 overflow-y-auto">
         <div className="px-6 lg:px-14 py-10 max-w-4xl space-y-8">
-
-          {/* Post meta */}
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                Title
-              </label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
+              <label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Title</label>
+              <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
                 placeholder="Give your note a clear, specific title"
-                className="w-full h-11 rounded-md border border-border/60 bg-background/40 px-3 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 transition-colors"
-              />
+                className="w-full h-11 rounded-md border border-border/60 bg-background/40 px-3 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 transition-colors" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                Excerpt
-              </label>
-              <textarea
-                value={excerpt}
-                onChange={(e) => setExcerpt(e.target.value)}
-                placeholder="One or two sentences that describe the core idea. Appears in the post list."
+              <label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Excerpt</label>
+              <textarea value={excerpt} onChange={(e) => setExcerpt(e.target.value)}
+                placeholder="One or two sentences. Appears in the post list."
                 rows={2}
-                className="w-full rounded-md border border-border/60 bg-background/40 px-3 py-2.5 text-sm text-foreground/85 placeholder:text-muted-foreground/40 leading-relaxed resize-none outline-none focus:border-primary/40 transition-colors"
-              />
+                className="w-full rounded-md border border-border/60 bg-background/40 px-3 py-2.5 text-sm text-foreground/85 placeholder:text-muted-foreground/40 leading-relaxed resize-none outline-none focus:border-primary/40 transition-colors" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                Tags
-              </label>
+              <label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Tags</label>
               <TagInput tags={tags} onChange={setTags} />
             </div>
           </div>
 
           <div className="border-t border-border/40" />
 
-          {/* Content blocks */}
           <div className="space-y-3">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-              Content
-            </p>
-
+            <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Content</p>
             {blocks.length === 0 && (
-              <p className="text-xs text-muted-foreground/50 py-6 text-center">
-                No blocks yet. Use the toolbar below to add content.
-              </p>
+              <p className="text-xs text-muted-foreground/50 py-6 text-center">No blocks yet. Use the toolbar below.</p>
             )}
-
-            {blocks.map((block) => {
-              const isCollapsed = collapsed.has(block.id)
+            {blocks.map((block, idx) => {
+              const props = {
+                onRemove: () => removeBlock(block.id),
+                onMove: (dir: 'up' | 'down') => moveBlock(block.id, dir),
+                isFirst: idx === 0,
+                isLast: idx === blocks.length - 1,
+              }
               return (
-                <div key={block.id} className="relative">
-                  {block.kind === "code" && (
-                    <button
-                      type="button"
-                      onClick={() => toggleCollapse(block.id)}
-                      className="absolute right-0 -top-0.5 z-10 flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors pr-1"
-                    >
-                      {isCollapsed ? (
-                        <ChevronDown className="size-3" />
-                      ) : (
-                        <ChevronUp className="size-3" />
-                      )}
-                      {isCollapsed ? "Expand" : "Collapse"}
-                    </button>
+                <div key={block.id}>
+                  {block.kind === 'text' && (
+                    <TextBlockEditor block={block} onChange={(b) => updateBlock(block.id, b)} {...props} />
                   )}
-                  <div className={cn(isCollapsed && "opacity-60")}>
-                    {!isCollapsed &&
-                      (block.kind === "text" ? (
-                        <TextBlockEditor
-                          block={block}
-                          onChange={(b) => updateBlock(block.id, b)}
-                          onRemove={() => removeBlock(block.id)}
-                        />
-                      ) : block.kind === "code" ? (
-                        <CodeBlockEditor
-                          block={block}
-                          onChange={(b) => updateBlock(block.id, b)}
-                          onRemove={() => removeBlock(block.id)}
-                        />
-                      ) : (
-                        <QuoteBlockEditor
-                          block={block}
-                          onChange={(b) => updateBlock(block.id, b)}
-                          onRemove={() => removeBlock(block.id)}
-                        />
-                      ))}
-                    {isCollapsed && (
-                      <div className="flex gap-2">
-                        <div className="w-4" />
-                        <div className="flex-1 rounded-md border border-border/50 bg-card/30 px-3 py-2 flex items-center gap-2">
-                          <Code2 className="size-3.5 text-muted-foreground/50" />
-                          <span className="text-xs text-muted-foreground truncate font-mono">
-                            {(block as Extract<DraftBlock, { kind: "code" }>).filename ||
-                              "code block"}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  {block.kind === 'code' && (
+                    <CodeBlockEditor block={block} onChange={(b) => updateBlock(block.id, b)} {...props} />
+                  )}
+                  {block.kind === 'quote' && (
+                    <QuoteBlockEditor block={block} onChange={(b) => updateBlock(block.id, b)} {...props} />
+                  )}
+                  {block.kind === 'image' && (
+                    <ImageBlockEditor block={block} onChange={(b) => updateBlock(block.id, b)} {...props} />
+                  )}
                 </div>
               )
             })}
-
             <AddBlockToolbar onAdd={addBlock} />
           </div>
         </div>
