@@ -34,7 +34,7 @@ export async function generatePdfCover(file: File, maxWidth = 400): Promise<Blob
     canvas.width = scaled.width
     canvas.height = scaled.height
     const ctx = canvas.getContext('2d')!
-    await page.render({ canvasContext: ctx, viewport: scaled }).promise
+    await page.render({ canvasContext: ctx, viewport: scaled, canvas }).promise
 
     return new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(
