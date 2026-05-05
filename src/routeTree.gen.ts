@@ -14,6 +14,7 @@ import { Route as EnglishRouteImport } from './routes/english'
 import { Route as DevlabRouteImport } from './routes/devlab'
 import { Route as BitacoraRouteImport } from './routes/bitacora'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as LibraryIndexRouteImport } from './routes/library/index'
 import { Route as FacultyIndexRouteImport } from './routes/faculty/index'
 import { Route as EnglishIndexRouteImport } from './routes/english/index'
 import { Route as FacultySubjectIdRouteImport } from './routes/faculty/$subjectId'
@@ -47,6 +48,11 @@ const BitacoraRoute = BitacoraRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LibraryIndexRoute = LibraryIndexRouteImport.update({
+  id: '/library/',
+  path: '/library/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FacultyIndexRoute = FacultyIndexRouteImport.update({
@@ -110,6 +116,7 @@ export interface FileRoutesByFullPath {
   '/faculty/$subjectId': typeof FacultySubjectIdRoute
   '/english/': typeof EnglishIndexRoute
   '/faculty/': typeof FacultyIndexRoute
+  '/library/': typeof LibraryIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -125,6 +132,7 @@ export interface FileRoutesByTo {
   '/faculty/$subjectId': typeof FacultySubjectIdRoute
   '/english': typeof EnglishIndexRoute
   '/faculty': typeof FacultyIndexRoute
+  '/library': typeof LibraryIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -142,6 +150,7 @@ export interface FileRoutesById {
   '/faculty/$subjectId': typeof FacultySubjectIdRoute
   '/english/': typeof EnglishIndexRoute
   '/faculty/': typeof FacultyIndexRoute
+  '/library/': typeof LibraryIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -160,6 +169,7 @@ export interface FileRouteTypes {
     | '/faculty/$subjectId'
     | '/english/'
     | '/faculty/'
+    | '/library/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -175,6 +185,7 @@ export interface FileRouteTypes {
     | '/faculty/$subjectId'
     | '/english'
     | '/faculty'
+    | '/library'
   id:
     | '__root__'
     | '/'
@@ -191,6 +202,7 @@ export interface FileRouteTypes {
     | '/faculty/$subjectId'
     | '/english/'
     | '/faculty/'
+    | '/library/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -202,6 +214,7 @@ export interface RootRouteChildren {
   AuthCallbackRoute: typeof AuthCallbackRoute
   FacultySubjectIdRoute: typeof FacultySubjectIdRoute
   FacultyIndexRoute: typeof FacultyIndexRoute
+  LibraryIndexRoute: typeof LibraryIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -239,6 +252,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/library/': {
+      id: '/library/'
+      path: '/library'
+      fullPath: '/library/'
+      preLoaderRoute: typeof LibraryIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/faculty/': {
@@ -337,6 +357,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthCallbackRoute: AuthCallbackRoute,
   FacultySubjectIdRoute: FacultySubjectIdRoute,
   FacultyIndexRoute: FacultyIndexRoute,
+  LibraryIndexRoute: LibraryIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

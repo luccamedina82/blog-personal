@@ -1,15 +1,16 @@
 import { cn } from '@/lib/utils'
 import { Link, useRouterState } from '@tanstack/react-router'
-import { Home, Code2, BookOpen, NotebookPen, GraduationCap } from 'lucide-react'
+import { Home, Code2, BookOpen, NotebookPen, GraduationCap, Library } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { GithubLogo, LinkedinLogo, TwitterLogo } from '@phosphor-icons/react'
 
-type SectionId = 'home' | 'devlab' | 'faculty' | 'english' | 'journal'
+type SectionId = 'home' | 'devlab' | 'faculty' | 'library' | 'english' | 'journal'
 
 const NAV: { id: SectionId; label: string; sub: string; icon: LucideIcon; to: string }[] = [
   { id: 'home', label: 'Home', sub: 'Portfolio', icon: Home, to: '/' },
   { id: 'devlab', label: 'Dev Lab', sub: 'Tech Notes', icon: Code2, to: '/devlab' },
   { id: 'faculty', label: 'Faculty', sub: 'Materias', icon: GraduationCap, to: '/faculty' },
+  { id: 'library', label: 'Biblioteca', sub: 'PDFs & Libros', icon: Library, to: '/library' },
   { id: 'english', label: 'English', sub: '& Literature', icon: BookOpen, to: '/english' },
   { id: 'journal', label: 'Bitácora', sub: 'Daily Log', icon: NotebookPen, to: '/bitacora' },
 ]

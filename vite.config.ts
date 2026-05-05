@@ -6,6 +6,9 @@ import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import path from 'path'
 
 export default defineConfig({
+  optimizeDeps: {
+    exclude: ['pdfjs-dist'],
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

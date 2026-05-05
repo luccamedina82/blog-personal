@@ -382,6 +382,42 @@ alter table habit_logs enable row level security;
 alter table tasks      enable row level security;
 alter table mood_logs  enable row level security;
 -- policy owner_all en cada una
+
+-- supabase/migrations/0005_library.sql
+
+-- Biblioteca: PDFs centralizados que alimentan faculty/devlab/english
+create table library_books (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  title text not null,
+  author text,
+  storage_path text not null,         -- ruta PDF en bucket media (${user_id}/library/...)
+  page_count integer,
+  cover_path text,                    -- ruta thumbnail página 1
+  tags text[] default '{}',
+  module_tags text[] default '{}',    -- subset de ['faculty','devlab','english']
+  created_at timestamptz default now()
+);
+
+-- Citas: vinculan una nota (faculty o devlab) a un libro+página
+-- source_id es FK lógica (apunta a faculty_notes o devlab_posts según source_kind)
+create table book_citations (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  book_id uuid not null references library_books(id) on delete cascade,
+  source_kind text not null check (source_kind in ('faculty_note','devlab_post')),
+  source_id uuid not null,
+  page integer not null,
+  note text,                          -- contexto opcional de la cita
+  created_at timestamptz default now()
+);
+
+create index book_citations_source_idx on book_citations(source_kind, source_id);
+create index book_citations_book_idx on book_citations(book_id);
+
+alter table library_books  enable row level security;
+alter table book_citations enable row level security;
+-- policy owner_all en cada una
 ```
 
 ---
@@ -550,6 +586,31 @@ export type MoodLog = {
   mood: number | null
   energy: number | null
   note: string | null
+}
+
+// Library (Fase 10)
+export type LibraryBook = {
+  id: string
+  user_id: string
+  title: string
+  author: string | null
+  storage_path: string
+  page_count: number | null
+  cover_path: string | null
+  tags: string[]
+  module_tags: Array<'faculty' | 'devlab' | 'english'>
+  created_at: string
+}
+
+export type BookCitation = {
+  id: string
+  user_id: string
+  book_id: string
+  source_kind: 'faculty_note' | 'devlab_post'
+  source_id: string
+  page: number
+  note: string | null
+  created_at: string
 }
 ```
 
@@ -856,19 +917,112 @@ export type MoodLog = {
 
 ---
 
-### Fase 10 — Personal (2 días)
+### Fase 10 — Biblioteca + Book Citations + Backlinks Preview UX (3-4 días)
+
+> **Motivación:** centralizar PDFs (libros, papers, apuntes externos) en una biblioteca propia que alimente módulos `/faculty`, `/devlab` y `/english`. Citar páginas concretas desde notas con vista split (editor izquierda, PDF derecha). Mejorar UX de backlinks `[[nota]]` con preview lateral en lugar de redirección dura.
+
+> **Decisión técnica (2026-05-05):** renderer PDF = **`react-pdf` (wojtekmaj/react-pdf)** — wrapper sobre PDF.js, estable, ampliamente usado, API simple, integra bien con Vite. Bundle worker ~700KB pero `React.lazy` + dynamic import resuelve el cost inicial. Alternativas descartadas: `react-pdf-viewer` (features clave en plan paid), `pdfjs-dist` directo (más boilerplate sin ganancia).
+
+> **Diseño dual-storage para citas:** marker inline en tiptap JSON (display) + row en `book_citations` (queries cross "qué notas citan este libro"). Sync simple: en cada save de nota → borrar rows previas para `(source_kind, source_id)` → reinsertar derivadas del JSON. Sin drift.
+
+#### 10a — Setup schema + queries
+- [x] Migración `supabase/migrations/0005_library.sql`: `library_books` + `book_citations` + RLS owner_all + índices (2026-05-05)
+- [ ] Correr migración en SQL editor
+- [x] `src/lib/library/types.ts`: `LibraryBook`, `BookCitation`, `BookCitationWithBook`, `LibraryModuleTag` (2026-05-05)
+- [x] `src/lib/library/queries.ts`: (2026-05-05)
+  - `listBooks(moduleTag?)`, `getBook`, `createBook`, `updateBook`, `deleteBook`
+  - `listCitationsForNote(sourceKind, sourceId)`, `replaceCitationsForNote(sourceKind, sourceId, citations[])`
+  - `listNotesCitingBook(bookId)`, `citationCountPerBook(bookIds[])`
+  - `getSignedUrl(storagePath, ttl=3600)` con caché in-memory TTL 1h
+
+#### 10b — Biblioteca UI (`/library`)
+- [x] Agregar `/library` al sidebar nav (entre `/faculty` y `/english`) (2026-05-05)
+- [x] `src/routes/library/index.tsx` — grid principal con loading skeleton (2026-05-05)
+- [x] `BookGrid`: cards con cover thumbnail (signed URL lazy), title, author, badges module_tags, contador citas (2026-05-05)
+- [x] `BookUploadDialog`: drag-drop PDF → pdfjs page count + cover canvas → upload storage → create row (2026-05-05)
+- [x] `BookEditDialog`: editar title/author/tags/module_tags sin re-upload (2026-05-05)
+- [x] `src/lib/library/pdf-utils.ts`: `ensurePdfWorker`, `getPdfPageCount`, `generatePdfCover` (2026-05-05)
+- [x] Eliminar libro: AlertDialog → borra storage (PDF + cover) → borra row cascade (2026-05-05)
+- [x] Filtros UI: chips por module_tag + búsqueda por title/author (2026-05-05)
+- [ ] Vista detalle libro: lista de notas que lo citan agrupadas por módulo (`listNotesCitingBook`) *(placeholder "próximamente" — implementar en 10c/10d cuando existan citas)*
+
+#### 10c — PDF Viewer component (reusable)
+- [ ] Instalar `react-pdf pdfjs-dist`
+- [ ] Configurar worker en Vite: `pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.js', import.meta.url).toString()`
+- [ ] `src/components/library/pdf-viewer.tsx` con props `{ storagePath, initialPage?, onPageChange?, className? }`:
+  - Resolver signed URL con caché in-memory (TTL 1h, refresh auto)
+  - `<Document>` + `<Page>` (renderTextLayer={false} por default — toggle si querés selección de texto)
+  - Virtualización: render página actual + 1 prev + 1 next, resto placeholder
+  - Controles: prev/next, input "ir a página N", zoom (+/-/fit-width), toggle text-layer
+  - Loading skeleton, error state si PDF corrupto / signed URL expira
+- [ ] Lazy import donde se use: `const PdfViewer = lazy(() => import('./pdf-viewer'))`
+
+#### 10d — Citas de libros en notas Faculty
+- [ ] Tiptap extension custom `BookCitation` (nodo inline atómico):
+  - Atributos: `book_id`, `page`, `label` (cache de title para render sin fetch)
+  - Render: `<span class="book-citation" data-book-id data-page>📖 {label} p.{page}</span>` — clickeable
+  - Schema en `src/components/devlab/tiptap-extensions/book-citation.ts` (compartido faculty+devlab)
+- [ ] `BookCitationPicker` modal (cmdk-style): search libros → seleccionar → input "página" → insert
+- [ ] Toolbar button en `TiptapEditor` (icon `BookMarked` Lucide) → abre picker
+- [ ] Hook `useNoteCitationsSync(noteId, sourceKind)`: en `onUpdate` de tiptap, debounced 500ms, extrae todos nodos `bookCitation` del doc → `replaceCitationsForNote(...)`
+- [ ] Vista split en `NoteView` Faculty:
+  - Layout: estado `rightPanel: 'pdf' | 'note-preview' | null`
+  - Cuando activo → grid 2 columnas con splitter draggable (lib `react-resizable-panels` o custom CSS resize)
+  - Izquierda: contenido nota (read-only, `.tiptap-render`)
+  - Derecha: `<PdfViewer storagePath={book.storage_path} initialPage={citation.page} />`
+  - Click en marker `📖` dentro de la nota → set `rightPanel='pdf'`, cargar libro+página
+  - Toggle cerrar panel
+  - Si nota tiene varias citas → tabs arriba del viewer para cambiar de libro
+- [ ] Cleanup: al borrar marker en editor, sync borra row correspondiente (cubierto por replace strategy)
+
+#### 10e — Citas de libros en notas DevLab
+- [ ] Reusar extension Tiptap `BookCitation` y `BookCitationPicker`
+- [ ] Toolbar button en `DevLabPostEditor`
+- [ ] `source_kind='devlab_post'` en sync hook
+- [ ] Vista split en `PostView` DevLab — mismo patrón que faculty (compartir layout component `SplitView`)
+
+#### 10f — Backlinks preview UX (refactor de Fase 9c)
+- [ ] Modificar renderer de `[[nota]]` en `NoteView` (faculty + devlab si aplica): click no redirige inmediato
+- [ ] Popover (Radix `Popover`) con 2 botones:
+  - **"Ir a la nota"** → navega a la ruta destino (comportamiento actual)
+  - **"Preview lateral"** → setea `rightPanel='note-preview'` con id de nota destino
+- [ ] `NotePreviewPanel` componente:
+  - Header: título nota + materia/categoría + botón "abrir completa" → navega
+  - Body: render `.tiptap-render` read-only del contenido
+  - Indica si la nota tiene sus propios backlinks (no recursivo — solo nivel 1)
+- [ ] Single slot lateral: si ya hay PDF abierto y abrís preview → reemplaza contenido (no stackea)
+- [ ] Mismo `SplitView` component reutilizado (panel right intercambiable)
+
+#### 10g — Cross-link english "books" ↔ biblioteca
+- [ ] En `BookForm` (english `/english/books`): campo opcional `library_book_id` (nullable FK)
+- [ ] Picker filtrado por `module_tags` incluye 'english'
+- [ ] Migración menor: `alter table books add column library_book_id uuid references library_books(id) on delete set null;`
+- [ ] En `BookDetail`: si tiene library link, botón "Leer PDF" → abre `PdfViewer` modal o split panel
+- [ ] Quotes existentes en `book_annotations` ya tienen campo `page` — referenciable a página del PDF
+
+**Salida:** biblioteca central de PDFs con upload+thumbnails, citas a página específica desde notas faculty/devlab, vista split editor↔PDF, preview lateral de backlinks reusando mismo componente split, cross-link con módulo english.
+
+**TECH DEBT marcada (ver sección 7):**
+- Citar frase específica `[[nota:texto-resaltado]]` o `📖 libro p.42:texto`
+- OCR de PDFs escaneados para búsqueda full-text
+- Anotación inline en PDF (highlights, notas margen, draw)
+- Búsqueda full-text dentro de PDFs (extraer texto con pdfjs y guardar en columna `tsvector`)
+
+---
+
+### Fase 11 — Personal (2 días)
 
 > Módulo `/personal`. Solo habits + tasks + mood. Sin pomodoro, sin gym (decisión 2026-05-04 — apps dedicadas son mejores).
 
-#### 10a — Setup
-- [ ] Migración SQL `supabase/migrations/0005_personal.sql`: habits, habit_logs, tasks, mood_logs + RLS
+#### 11a — Setup
+- [ ] Migración SQL `supabase/migrations/0006_personal.sql`: habits, habit_logs, tasks, mood_logs + RLS
 - [ ] `src/lib/personal/types.ts`: `Habit`, `HabitLog`, `Task`, `MoodLog`
 - [ ] `src/lib/personal/queries.ts`: CRUD para 4 tablas + helpers (toggleHabitLog por fecha, listTasksByPriority)
 - [ ] Agregar `/personal` al header nav
 - [ ] `src/routes/personal/index.tsx` → dashboard
 - [ ] Tabs internos: Habits | Tasks | Mood (similar a `EnglishShell`)
 
-#### 10b — Habits
+#### 11b — Habits
 - [ ] `HabitsList`: lista con nombre, cue, frequency, racha actual, racha máxima
 - [ ] `HabitForm` modal: name, cue (atomic habits trigger), frequency (daily/weekly), weekly_target, color
 - [ ] Toggle día actual: click en habit → upsert/delete `habit_logs` para hoy
@@ -877,7 +1031,7 @@ export type MoodLog = {
 - [ ] Best streak histórico
 - [ ] Archivar hábito (soft delete con `archived=true`)
 
-#### 10c — Tasks Eisenhower
+#### 11c — Tasks Eisenhower
 - [ ] `TaskBoard`: 4 cuadrantes (P1 urgente+importante, P2 importante, P3 urgente, P4 ni)
 - [ ] `TaskForm` modal: title, notes, priority, due_date, recurring
 - [ ] Toggle `done` con checkbox + `done_at = now()`
@@ -885,13 +1039,13 @@ export type MoodLog = {
 - [ ] Tareas recurrentes: al marcar done, auto-crear próxima instancia (daily → mañana, weekly → +7d)
 - [ ] Eliminar tarea con confirm
 
-#### 10d — Mood log
+#### 11d — Mood log
 - [ ] Quick-log: 1 click hoy → emoji selector (1-5 mood + 1-5 energy)
 - [ ] Nota corta opcional
 - [ ] Heatmap mensual (grid emojis por día)
 - [ ] Gráfico recharts: tendencia mood/energy últimos 30 días
 
-#### 10e — Dashboard `/personal`
+#### 11e — Dashboard `/personal`
 - [ ] Hábitos hoy (checklist quick-toggle)
 - [ ] Tareas P1 + vencidas
 - [ ] Mood hoy (si no logueado, prompt)
@@ -901,7 +1055,7 @@ export type MoodLog = {
 
 ---
 
-### Fase 11 — IA real (cuando justifique pagar)
+### Fase 12 — IA real (cuando justifique pagar)
 
 > Acá aparece la pregunta NestJS vs Edge Functions. Decisión deferida hasta llegar.
 
@@ -923,12 +1077,12 @@ export type MoodLog = {
 
 ## 6. Módulos aparte (futuros)
 
-> `/faculty` y `/personal` movidos a Fases 8-10 (2026-05-04). Esta sección queda para otros módulos futuros.
+> `/faculty` movido a Fases 8-9 (2026-05-04). `/library` movido a Fase 10 (2026-05-05). `/personal` movido a Fase 11 (2026-05-04). Esta sección queda para otros módulos futuros.
 
 ### Posibles futuros
 
 - [ ] `/finance` — gastos + presupuesto (descartado scope creep, reconsiderar)
-- [ ] `/reading` — separar libros del módulo english si crece mucho
+- [ ] `/reading` — separar libros del módulo english si crece mucho (parcialmente cubierto por `/library` Fase 10)
 - [ ] `/projects` — gestión side-projects fuera DevLab (PMO style)
 
 ---
@@ -958,6 +1112,10 @@ export type MoodLog = {
 | **Backlinks `[[nota]]`** | Notas planas en Fase 8 | Fase 9 — parser + autocomplete |
 | **Export PDF apuntes** | Fase 9 | `jspdf` o `react-pdf` |
 | **Tareas recurrentes auto-rollover** | Manual primero | Edge function cron o trigger client-side al login |
+| **Citar frase específica en backlinks/citas** | Página completa o nota completa cubre Fase 10 | Sintaxis `[[nota:texto-resaltado]]` o `📖 libro p.42:texto`. Requiere parser + UI rangos texto + persistir offsets |
+| **OCR PDFs escaneados** | Solo PDFs con texto embebido buscables | Tesseract.js client-side (lento) o backend Whisper-style. Triggear post-upload |
+| **Anotaciones inline en PDF** | Cita por página cubre Fase 10 | Highlights/notas margen — `react-pdf-highlighter` o canvas overlay custom |
+| **Búsqueda full-text en PDFs** | Búsqueda solo por title/author en biblioteca | Extraer texto con pdfjs en upload → guardar en columna `tsvector` → query GIN index |
 
 ---
 
@@ -1032,8 +1190,8 @@ VITE_SUPABASE_ANON_KEY
 
 ---
 
-**Última actualización:** 2026-05-04
-**Estado:** Fases 0–7 COMPLETAS. Roadmap extendido con Fase 8 (Faculty MVP), Fase 9 (Faculty avanzado), Fase 10 (Personal habits+tasks+mood), Fase 11 (IA real, ex-Fase 8). Decisiones 2026-05-04: lista+countdown deadlines (no calendario), sin KaTeX, sin pomodoro, sin gym, empezar limpio sin Notion import. Siguiente: ejecutar Fase 8a (migración SQL faculty + setup ruta).
+**Última actualización:** 2026-05-05
+**Estado:** Fases 0–7 COMPLETAS. Fase 8 (Faculty MVP) COMPLETA. Fase 9a/9a.5/9b/9c COMPLETAS. Pendiente: 9d (Export PDF apunte). Roadmap extendido 2026-05-05 con Fase 10 (Biblioteca + Book Citations + Backlinks Preview UX, renderer `react-pdf`), corriendo Personal a Fase 11 e IA a Fase 12. Decisiones 2026-05-05: PDF renderer = react-pdf wojtekmaj, citas con dual-storage (marker tiptap + row book_citations), backlinks `[[nota]]` con popover 2 opciones (ir / preview lateral), citar frase específica = tech debt. Siguiente: ejecutar 9d o saltar a Fase 10a (migración SQL library + setup ruta).
 
 
 

@@ -120,7 +120,7 @@ function FacultyDashboard() {
         </aside>
       </div>
 
-      {!loading && <GradesChart data={gradesBySemester} />}
+      {/* {!loading && <GradesChart data={gradesBySemester} />} */}
 
       <SubjectForm
         open={formOpen}
