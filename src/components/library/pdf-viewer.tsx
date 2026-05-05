@@ -8,8 +8,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { getSignedUrl } from '@/lib/library/queries'
 import { ensurePdfWorker } from '@/lib/library/pdf-utils'
+import type { DocumentProps } from 'react-pdf'
 
 ensurePdfWorker()
+
+type PdfDoc = Parameters<NonNullable<DocumentProps['onLoadSuccess']>>[0]
+
+const RENDER_MARGIN = '900px' // pages within 900px of viewport get rendered
 
 interface Props {
   storagePath: string
@@ -28,64 +33,104 @@ export function PdfViewer({ storagePath, initialPage = 1, onPageChange, classNam
   const [fitWidth, setFitWidth] = useState(true)
   const [scale, setScale] = useState(1.0)
   const [containerWidth, setContainerWidth] = useState(0)
+  // Pages that should render their <Page> (near viewport)
+  const [renderedPages, setRenderedPages] = useState<Set<number>>(new Set())
 
   const containerRef = useRef<HTMLDivElement>(null)
-  const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map())
-  const observerRef = useRef<IntersectionObserver | null>(null)
+  // aspect ratio (height/width) per page — fetched from pdf metadata, no render needed
+  const aspectRatios = useRef<Map<number, number>>(new Map())
+  const pageWrapperRefs = useRef<Map<number, HTMLDivElement>>(new Map())
+  const renderObserver = useRef<IntersectionObserver | null>(null)
+  const trackObserver = useRef<IntersectionObserver | null>(null)
 
   useEffect(() => {
     setUrl(null)
     setUrlError(false)
     setNumPages(0)
+    setRenderedPages(new Set())
+    aspectRatios.current.clear()
     setCurrentPage(initialPage)
     setPageInput(String(initialPage))
-    getSignedUrl(storagePath)
-      .then(setUrl)
-      .catch(() => setUrlError(true))
+    getSignedUrl(storagePath).then(setUrl).catch(() => setUrlError(true))
   }, [storagePath])
 
-  // Sync pageInput when currentPage changes (e.g. via scroll)
   useEffect(() => {
     setPageInput(String(currentPage))
     onPageChange?.(currentPage)
   }, [currentPage])
 
-  // ResizeObserver for fit-width
-  const measureRef = useCallback((node: HTMLDivElement | null) => {
-    if (!node) return
-    const ro = new ResizeObserver((entries) => {
-      setContainerWidth(entries[0].contentRect.width)
-    })
-    ro.observe(node)
-  }, [])
-
-  // IntersectionObserver: track which page is most visible
+  // Setup both observers when pages are known
   useEffect(() => {
-    if (!numPages) return
-    observerRef.current?.disconnect()
+    if (!numPages || !containerRef.current) return
 
-    observerRef.current = new IntersectionObserver(
+    // Observer 1: render trigger (large margin = pre-load before visible)
+    renderObserver.current?.disconnect()
+    renderObserver.current = new IntersectionObserver(
+      (entries) => {
+        const toAdd: number[] = []
+        for (const e of entries) {
+          if (e.isIntersecting) toAdd.push(Number(e.target.getAttribute('data-page')))
+        }
+        if (toAdd.length > 0) {
+          setRenderedPages((prev) => {
+            const next = new Set(prev)
+            toAdd.forEach((n) => next.add(n))
+            return next
+          })
+        }
+      },
+      { root: containerRef.current, rootMargin: RENDER_MARGIN, threshold: 0 },
+    )
+
+    // Observer 2: current page tracker (viewport only)
+    trackObserver.current?.disconnect()
+    trackObserver.current = new IntersectionObserver(
       (entries) => {
         let best: number | null = null
         let bestRatio = 0
-        for (const entry of entries) {
-          if (entry.isIntersecting && entry.intersectionRatio > bestRatio) {
-            bestRatio = entry.intersectionRatio
-            best = Number(entry.target.getAttribute('data-page'))
+        for (const e of entries) {
+          if (e.isIntersecting && e.intersectionRatio > bestRatio) {
+            bestRatio = e.intersectionRatio
+            best = Number(e.target.getAttribute('data-page'))
           }
         }
         if (best !== null) setCurrentPage(best)
       },
-      { root: containerRef.current, threshold: [0, 0.25, 0.5, 0.75, 1] },
+      { root: containerRef.current, rootMargin: '0px', threshold: [0, 0.25, 0.5, 0.75, 1] },
     )
 
-    pageRefs.current.forEach((el) => observerRef.current!.observe(el))
-    return () => observerRef.current?.disconnect()
+    pageWrapperRefs.current.forEach((el) => {
+      renderObserver.current!.observe(el)
+      trackObserver.current!.observe(el)
+    })
+
+    return () => {
+      renderObserver.current?.disconnect()
+      trackObserver.current?.disconnect()
+    }
   }, [numPages])
 
+  const containerMeasureRef = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return
+    const ro = new ResizeObserver((entries) => setContainerWidth(entries[0].contentRect.width))
+    ro.observe(node)
+  }, [])
+
+  async function onDocumentLoad(pdf: PdfDoc) {
+    setNumPages(pdf.numPages)
+    // Pre-fetch page aspect ratios (just PDF metadata — fast, no rendering)
+    const pages = await Promise.all(
+      Array.from({ length: pdf.numPages }, (_, i) => pdf.getPage(i + 1)),
+    )
+    for (const p of pages) {
+      const vp = p.getViewport({ scale: 1 })
+      aspectRatios.current.set(p.pageNumber, vp.height / vp.width)
+    }
+    if (initialPage > 1) requestAnimationFrame(() => scrollToPage(initialPage))
+  }
+
   function scrollToPage(n: number) {
-    const el = pageRefs.current.get(n)
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    pageWrapperRefs.current.get(n)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   function goTo(n: number) {
@@ -103,6 +148,11 @@ export function PdfViewer({ storagePath, initialPage = 1, onPageChange, classNam
 
   const pageWidth = fitWidth && containerWidth > 0 ? containerWidth - 32 : undefined
   const pageScale = fitWidth ? undefined : scale
+
+  function placeholderHeight(n: number) {
+    const ratio = aspectRatios.current.get(n) ?? 1.414 // A4 fallback
+    return Math.round((pageWidth ?? 600) * ratio)
+  }
 
   if (urlError) {
     return (
@@ -127,13 +177,9 @@ export function PdfViewer({ storagePath, initialPage = 1, onPageChange, classNam
     <div className={cn('flex flex-col h-full', className)}>
       {/* Toolbar */}
       <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border/70 bg-background shrink-0">
-        <Button
-          variant="ghost" size="icon" className="size-7"
-          onClick={() => goTo(currentPage - 1)} disabled={currentPage <= 1}
-        >
+        <Button variant="ghost" size="icon" className="size-7" onClick={() => goTo(currentPage - 1)} disabled={currentPage <= 1}>
           <ChevronLeft className="size-3.5" />
         </Button>
-
         <div className="flex items-center gap-1">
           <Input
             value={pageInput}
@@ -144,14 +190,9 @@ export function PdfViewer({ storagePath, initialPage = 1, onPageChange, classNam
           />
           <span className="text-xs text-muted-foreground tabular-nums">/ {numPages}</span>
         </div>
-
-        <Button
-          variant="ghost" size="icon" className="size-7"
-          onClick={() => goTo(currentPage + 1)} disabled={currentPage >= numPages}
-        >
+        <Button variant="ghost" size="icon" className="size-7" onClick={() => goTo(currentPage + 1)} disabled={currentPage >= numPages}>
           <ChevronRight className="size-3.5" />
         </Button>
-
         <div className="flex items-center gap-0.5 ml-auto">
           <Button
             variant="ghost" size="icon" className="size-7"
@@ -180,18 +221,17 @@ export function PdfViewer({ storagePath, initialPage = 1, onPageChange, classNam
         </div>
       </div>
 
-      {/* Scrollable pages */}
+      {/* Scrollable container */}
       <div
-        ref={(node) => { (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node; measureRef(node) }}
+        ref={(node) => {
+          (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node
+          containerMeasureRef(node)
+        }}
         className="flex-1 overflow-auto bg-muted/30"
       >
         <Document
           file={url}
-          onLoadSuccess={({ numPages: n }) => {
-            setNumPages(n)
-            // Scroll to initialPage after load
-            if (initialPage > 1) requestAnimationFrame(() => scrollToPage(initialPage))
-          }}
+          onLoadSuccess={onDocumentLoad}
           onLoadError={(err) => console.error('[PdfViewer] load error:', err)}
           loading={
             <div className="flex flex-col gap-2 p-6 max-w-2xl mx-auto">
@@ -207,24 +247,38 @@ export function PdfViewer({ storagePath, initialPage = 1, onPageChange, classNam
               key={n}
               data-page={n}
               ref={(el) => {
-                if (el) { pageRefs.current.set(n, el); observerRef.current?.observe(el) }
-                else pageRefs.current.delete(n)
+                if (el) {
+                  pageWrapperRefs.current.set(n, el)
+                  renderObserver.current?.observe(el)
+                  trackObserver.current?.observe(el)
+                } else {
+                  pageWrapperRefs.current.delete(n)
+                }
               }}
               className="flex justify-center px-4 py-3"
+              // Stable height prevents scroll position jumps when page mounts/unmounts
+              style={{ minHeight: placeholderHeight(n) + 24 }}
             >
-              <Page
-                pageNumber={n}
-                width={pageWidth}
-                scale={pageScale}
-                renderTextLayer
-                renderAnnotationLayer={false}
-                loading={
-                  <div
-                    className="rounded bg-secondary/40 animate-pulse"
-                    style={{ width: pageWidth ?? 600, height: Math.round((pageWidth ?? 600) * 1.414) }}
-                  />
-                }
-              />
+              {renderedPages.has(n) ? (
+                <Page
+                  pageNumber={n}
+                  width={pageWidth}
+                  scale={pageScale}
+                  renderTextLayer
+                  renderAnnotationLayer={false}
+                  loading={
+                    <div
+                      className="rounded bg-secondary/40 animate-pulse"
+                      style={{ width: pageWidth ?? 600, height: placeholderHeight(n) }}
+                    />
+                  }
+                />
+              ) : (
+                <div
+                  className="rounded bg-secondary/30"
+                  style={{ width: pageWidth ?? 600, height: placeholderHeight(n) }}
+                />
+              )}
             </div>
           ))}
         </Document>
