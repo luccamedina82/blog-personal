@@ -14,7 +14,9 @@ import { Route as EnglishRouteImport } from './routes/english'
 import { Route as DevlabRouteImport } from './routes/devlab'
 import { Route as BitacoraRouteImport } from './routes/bitacora'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as FacultyIndexRouteImport } from './routes/faculty/index'
 import { Route as EnglishIndexRouteImport } from './routes/english/index'
+import { Route as FacultySubjectIdRouteImport } from './routes/faculty/$subjectId'
 import { Route as EnglishVocabRouteImport } from './routes/english/vocab'
 import { Route as EnglishShadowingRouteImport } from './routes/english/shadowing'
 import { Route as EnglishEvaluatorRouteImport } from './routes/english/evaluator'
@@ -47,10 +49,20 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FacultyIndexRoute = FacultyIndexRouteImport.update({
+  id: '/faculty/',
+  path: '/faculty/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EnglishIndexRoute = EnglishIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => EnglishRoute,
+} as any)
+const FacultySubjectIdRoute = FacultySubjectIdRouteImport.update({
+  id: '/faculty/$subjectId',
+  path: '/faculty/$subjectId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const EnglishVocabRoute = EnglishVocabRouteImport.update({
   id: '/vocab',
@@ -95,7 +107,9 @@ export interface FileRoutesByFullPath {
   '/english/evaluator': typeof EnglishEvaluatorRoute
   '/english/shadowing': typeof EnglishShadowingRoute
   '/english/vocab': typeof EnglishVocabRoute
+  '/faculty/$subjectId': typeof FacultySubjectIdRoute
   '/english/': typeof EnglishIndexRoute
+  '/faculty/': typeof FacultyIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -108,7 +122,9 @@ export interface FileRoutesByTo {
   '/english/evaluator': typeof EnglishEvaluatorRoute
   '/english/shadowing': typeof EnglishShadowingRoute
   '/english/vocab': typeof EnglishVocabRoute
+  '/faculty/$subjectId': typeof FacultySubjectIdRoute
   '/english': typeof EnglishIndexRoute
+  '/faculty': typeof FacultyIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -123,7 +139,9 @@ export interface FileRoutesById {
   '/english/evaluator': typeof EnglishEvaluatorRoute
   '/english/shadowing': typeof EnglishShadowingRoute
   '/english/vocab': typeof EnglishVocabRoute
+  '/faculty/$subjectId': typeof FacultySubjectIdRoute
   '/english/': typeof EnglishIndexRoute
+  '/faculty/': typeof FacultyIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -139,7 +157,9 @@ export interface FileRouteTypes {
     | '/english/evaluator'
     | '/english/shadowing'
     | '/english/vocab'
+    | '/faculty/$subjectId'
     | '/english/'
+    | '/faculty/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -152,7 +172,9 @@ export interface FileRouteTypes {
     | '/english/evaluator'
     | '/english/shadowing'
     | '/english/vocab'
+    | '/faculty/$subjectId'
     | '/english'
+    | '/faculty'
   id:
     | '__root__'
     | '/'
@@ -166,7 +188,9 @@ export interface FileRouteTypes {
     | '/english/evaluator'
     | '/english/shadowing'
     | '/english/vocab'
+    | '/faculty/$subjectId'
     | '/english/'
+    | '/faculty/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -176,6 +200,8 @@ export interface RootRouteChildren {
   EnglishRoute: typeof EnglishRouteWithChildren
   LoginRoute: typeof LoginRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
+  FacultySubjectIdRoute: typeof FacultySubjectIdRoute
+  FacultyIndexRoute: typeof FacultyIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -215,12 +241,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/faculty/': {
+      id: '/faculty/'
+      path: '/faculty'
+      fullPath: '/faculty/'
+      preLoaderRoute: typeof FacultyIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/english/': {
       id: '/english/'
       path: '/'
       fullPath: '/english/'
       preLoaderRoute: typeof EnglishIndexRouteImport
       parentRoute: typeof EnglishRoute
+    }
+    '/faculty/$subjectId': {
+      id: '/faculty/$subjectId'
+      path: '/faculty/$subjectId'
+      fullPath: '/faculty/$subjectId'
+      preLoaderRoute: typeof FacultySubjectIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/english/vocab': {
       id: '/english/vocab'
@@ -295,6 +335,8 @@ const rootRouteChildren: RootRouteChildren = {
   EnglishRoute: EnglishRouteWithChildren,
   LoginRoute: LoginRoute,
   AuthCallbackRoute: AuthCallbackRoute,
+  FacultySubjectIdRoute: FacultySubjectIdRoute,
+  FacultyIndexRoute: FacultyIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

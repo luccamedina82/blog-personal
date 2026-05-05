@@ -1,0 +1,186 @@
+import { useState } from 'react'
+import { Plus, Pencil, Trash2, CalendarDays, Star } from 'lucide-react'
+import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import { deleteFacultyNote } from '@/lib/faculty/queries'
+import type { FacultyNote, FacultyNoteKind } from '@/lib/faculty/types'
+
+const KIND_FILTERS: Array<{ value: FacultyNoteKind | 'all'; label: string }> = [
+  { value: 'all', label: 'Todas' },
+  { value: 'clase', label: 'Clase' },
+  { value: 'apunte', label: 'Apunte' },
+  { value: 'tp', label: 'TP' },
+  { value: 'parcial', label: 'Parcial' },
+  { value: 'final', label: 'Final' },
+]
+
+const KIND_BADGE: Record<FacultyNoteKind, string> = {
+  clase: 'bg-blue-500/10 text-blue-600 border-blue-200 dark:border-blue-800',
+  apunte: 'bg-violet-500/10 text-violet-600 border-violet-200 dark:border-violet-800',
+  tp: 'bg-orange-500/10 text-orange-600 border-orange-200 dark:border-orange-800',
+  parcial: 'bg-red-500/10 text-red-600 border-red-200 dark:border-red-800',
+  final: 'bg-rose-500/10 text-rose-700 border-rose-200 dark:border-rose-800',
+}
+
+type Props = {
+  notes: FacultyNote[]
+  onNew: () => void
+  onSelect: (note: FacultyNote) => void
+  onEdit: (note: FacultyNote) => void
+  onDeleted: (id: string) => void
+}
+
+export function NotesList({ notes, onNew, onSelect, onEdit, onDeleted }: Props) {
+  const [filter, setFilter] = useState<FacultyNoteKind | 'all'>('all')
+
+  const visible = filter === 'all' ? notes : notes.filter((n) => n.kind === filter)
+
+  async function handleDelete(n: FacultyNote) {
+    try {
+      await deleteFacultyNote(n.id)
+      onDeleted(n.id)
+      toast.success(`"${n.title}" eliminada`)
+    } catch {
+      toast.error('Error al eliminar')
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-1 flex-wrap">
+          {KIND_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              onClick={() => setFilter(f.value)}
+              className={cn(
+                'h-7 px-3 rounded-full text-xs transition-colors',
+                filter === f.value
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground bg-secondary/50 hover:bg-secondary',
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <Button size="sm" className="gap-1.5 shrink-0" onClick={onNew}>
+          <Plus className="size-3.5" />
+          Nueva nota
+        </Button>
+      </div>
+
+      {visible.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center rounded-lg border border-dashed border-border">
+          <p className="text-sm text-muted-foreground">
+            {filter === 'all' ? 'Sin notas todavía.' : `Sin notas de tipo "${filter}".`}
+          </p>
+          {filter === 'all' && (
+            <Button size="sm" variant="outline" className="mt-3" onClick={onNew}>
+              Crear primera nota
+            </Button>
+          )}
+        </div>
+      ) : (
+        <ul className="divide-y divide-border/50">
+          {visible.map((note) => (
+            <li key={note.id} className="group relative">
+              <button
+                type="button"
+                onClick={() => onSelect(note)}
+                className="w-full flex flex-col sm:flex-row sm:items-start gap-3 py-4 text-left hover:bg-secondary/20 -mx-3 px-3 rounded-md transition-colors"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                    <Badge
+                      variant="outline"
+                      className={cn('text-[10px] uppercase tracking-wide', KIND_BADGE[note.kind])}
+                    >
+                      {note.kind}
+                    </Badge>
+                    {note.tags.slice(0, 3).map((t) => (
+                      <Badge
+                        key={t}
+                        variant="secondary"
+                        className="rounded-sm text-[9px] font-mono font-normal bg-secondary/40 border border-border/50 h-4 px-1.5"
+                      >
+                        {t}
+                      </Badge>
+                    ))}
+                  </div>
+                  <p className="text-sm font-medium text-foreground group-hover:text-primary transition-colors leading-snug">
+                    {note.title}
+                  </p>
+                  <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground/70 flex-wrap">
+                    {note.date && (
+                      <span className="flex items-center gap-1">
+                        <CalendarDays className="size-3" />
+                        {new Date(note.date + 'T00:00:00').toLocaleDateString('es-AR', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </span>
+                    )}
+                    {note.grade != null && (
+                      <span className="flex items-center gap-1">
+                        <Star className="size-3" />
+                        {note.grade}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </button>
+
+              <div
+                className="absolute top-4 right-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  onClick={() => onEdit(note)}
+                  className="flex items-center justify-center size-6 rounded text-muted-foreground/50 hover:text-foreground hover:bg-secondary transition-colors"
+                >
+                  <Pencil className="size-3" />
+                </button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex items-center justify-center size-6 rounded text-muted-foreground/50 hover:text-destructive hover:bg-secondary transition-colors"
+                    >
+                      <Trash2 className="size-3" />
+                    </button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>¿Eliminar "{note.title}"?</AlertDialogTitle>
+                      <AlertDialogDescription>No se puede deshacer.</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => handleDelete(note)}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Eliminar
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}

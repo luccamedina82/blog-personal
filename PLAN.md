@@ -740,40 +740,40 @@ export type MoodLog = {
 > Inicio módulo `/faculty`. Empezar limpio (no importar Notion). Reusa `DevLabPostEditor` (Tiptap) para notas. Sin KaTeX, sin pomodoro/gym (decisión 2026-05-04).
 
 #### 8a — Setup ruta + schema
-- [ ] Migración SQL `supabase/migrations/0004_faculty.sql`: 4 tablas (subjects/topics/notes/deadlines) + RLS owner_all
-- [ ] Correr migración en Supabase SQL editor
-- [ ] Crear `src/lib/faculty/types.ts` con `FacultySubject`, `FacultyTopic`, `FacultyNote`, `FacultyDeadline`
-- [ ] Crear `src/lib/faculty/queries.ts`: list/create/update/delete para subjects + notes + deadlines
-- [ ] Agregar `/faculty` al header nav (entre `/devlab` y `/english`)
-- [ ] `src/routes/faculty/index.tsx` → dashboard (próximos deadlines + grid materias)
-- [ ] `src/routes/faculty/$subjectId.tsx` → vista materia individual
-- [ ] `src/components/faculty/faculty-shell.tsx` (header + back nav)
+- [x] Migración SQL `supabase/migrations/0004_faculty.sql`: 4 tablas (subjects/topics/notes/deadlines) + RLS owner_all (2026-05-05)
+- [x] Correr migración en Supabase SQL editor
+- [x] Crear `src/lib/faculty/types.ts` con `FacultySubject`, `FacultyTopic`, `FacultyNote`, `FacultyDeadline` (2026-05-05)
+- [x] Crear `src/lib/faculty/queries.ts`: list/create/update/delete para subjects + notes + deadlines (2026-05-05)
+- [x] Agregar `/faculty` al header nav (entre `/devlab` y `/english`) (2026-05-05)
+- [x] `src/routes/faculty/index.tsx` → dashboard (próximos deadlines + grid materias) (2026-05-05)
+- [x] `src/routes/faculty/$subjectId.tsx` → vista materia individual (2026-05-05)
+- [x] `src/components/faculty/faculty-shell.tsx` (header + back nav) (2026-05-05)
 
 #### 8b — Subjects CRUD
-- [ ] `SubjectGrid`: cards por materia con name, code, semester, status badge, color
-- [ ] `SubjectForm` modal: name, code, semester, professor, credits, color picker, status select
-- [ ] Filtro por status (cursando / final-pendiente / aprobada / recursar)
-- [ ] Eliminar materia con `AlertDialog` (cascade borra notas + deadlines)
-- [ ] Color como border-left de card para identificar visualmente
+- [x] `SubjectGrid`: cards por materia con name, code, semester, status badge, color (2026-05-05)
+- [x] `SubjectForm` modal: name, code, semester, professor, credits, color picker, status select (2026-05-05)
+- [x] Filtro por status (cursando / final-pendiente / aprobada / recursar) (2026-05-05)
+- [x] Eliminar materia con `AlertDialog` (cascade borra notas + deadlines) (2026-05-05)
+- [x] Color como border-left de card para identificar visualmente (2026-05-05)
 
 #### 8c — Notes CRUD por materia
-- [ ] `NotesList` dentro de `SubjectDetail`: filtros por kind (clase / apunte / tp / parcial / final)
-- [ ] `NoteEditor` reusando `DevLabPostEditor` (Tiptap, blocks jsonb)
-- [ ] Campos extra: `kind` select, `date` (date picker), `grade` (solo para tp/parcial/final), `tags`
-- [ ] `NoteView` reusando estilos `.tiptap-render` de DevLab
-- [ ] Cross-link "→ Anki" en notas (reusar `SaveToAnkiButton`, `source_kind='faculty'`)
+- [x] `NotesList` dentro de `SubjectDetail`: filtros por kind (clase / apunte / tp / parcial / final) (2026-05-05)
+- [x] `NoteEditor` reusando `DevLabPostEditor` (Tiptap, blocks jsonb) (2026-05-05)
+- [x] Campos extra: `kind` select, `date` (date picker), `grade` (solo para tp/parcial/final), `tags` (2026-05-05)
+- [x] `NoteView` reusando estilos `.tiptap-render` de DevLab (2026-05-05)
+- [x] Cross-link "→ Anki" en notas (reusar `SaveToAnkiButton`, quotes con botón inline) (2026-05-05)
 
 #### 8d — Deadlines lista + countdown
-- [ ] `DeadlineList`: orden por `due_at asc`, separador hoy/semana/mes/después
-- [ ] `DeadlineForm` modal: subject_id, kind, title, due_at (datetime-local), note
-- [ ] Toggle `done` con checkbox
-- [ ] `CountdownBadge`: "en 3 días", "mañana", "vencido" — color según urgencia
-- [ ] Widget "próximos deadlines" en dashboard `/faculty` (top 5)
-- [ ] Eliminar deadline con confirm
+- [x] `DeadlineList`: orden por `due_at asc`, separador vencido/hoy/semana/mes/después/completados (2026-05-05)
+- [x] `DeadlineForm` modal: subject_id, kind, title, due_at (datetime-local), note (2026-05-05)
+- [x] Toggle `done` con checkbox (2026-05-05)
+- [x] `CountdownBadge`: "en N días", "mañana", "hoy", "vencido", "hecho" — color según urgencia (2026-05-05)
+- [x] Widget "próximos deadlines" en dashboard `/faculty` (top 5) usando `CountdownBadge` (2026-05-05)
+- [x] Eliminar deadline con confirm (2026-05-05)
 
 #### 8e — Dashboard
-- [ ] `/faculty/index.tsx`: grid materias activas + próximos 5 deadlines + count tareas pendientes
-- [ ] Stat cards: materias cursando, deadlines esta semana, promedio general
+- [x] `/faculty/index.tsx`: grid materias activas + próximos 5 deadlines + count tareas pendientes
+- [x] Stat cards: materias cursando, deadlines esta semana, promedio general
 
 **Salida:** `/faculty` operativo — materias CRUD, notas Tiptap por materia, deadlines lista con countdown.
 
@@ -782,11 +782,11 @@ export type MoodLog = {
 ### Fase 9 — Faculty avanzado (1-2 días)
 
 #### 9a — Topics + progreso
-- [ ] CRUD `faculty_topics` por materia (programa de la materia)
-- [ ] `TopicList` con drag-handle (botones ▲▼ primero) y status select (pendiente/visto/dominado)
-- [ ] Asociar nota a topic via `topic_id` (select en `NoteEditor`)
-- [ ] Progress bar por materia: % topics dominados / total
-- [ ] Vista agregada: `subject.progress = topics dominados / topics total`
+- [x] CRUD `faculty_topics` por materia (programa de la materia)
+- [x] `TopicList` con drag-handle (botones ▲▼ primero) y status select (pendiente/visto/dominado)
+- [x] Asociar nota a topic via `topic_id` (select en `NoteEditor`)
+- [x] Progress bar por materia: % topics dominados / total
+- [x] Vista agregada: `subject.progress = topics dominados / topics total`
 
 #### 9b — Grades tracker
 - [ ] Tabla calificaciones por materia (todas las notas con `grade not null`)
