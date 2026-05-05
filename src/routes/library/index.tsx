@@ -1,11 +1,16 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
-import { Library } from 'lucide-react'
+import { Library, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { listBooks, citationCountPerBook } from '@/lib/library/queries'
 import { BookGrid } from '@/components/library/book-grid'
 import { BookUploadDialog } from '@/components/library/book-upload-dialog'
 import { BookEditDialog } from '@/components/library/book-edit-dialog'
+import { PdfViewer } from '@/components/library/pdf-viewer'
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle,
+} from '@/components/ui/sheet'
+import { Button } from '@/components/ui/button'
 import type { LibraryBook } from '@/lib/library/types'
 
 export const Route = createFileRoute('/library/')({
@@ -19,6 +24,7 @@ function LibraryPage() {
   const [loading, setLoading] = useState(true)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [editing, setEditing] = useState<LibraryBook | null>(null)
+  const [viewing, setViewing] = useState<LibraryBook | null>(null)
 
   useEffect(() => {
     load()
@@ -55,9 +61,8 @@ function LibraryPage() {
     setCitationCounts((prev) => { const c = { ...prev }; delete c[id]; return c })
   }
 
-  function handleOpen(_book: LibraryBook) {
-    // Phase 10c: PDF viewer — placeholder for now
-    toast.info('Visor PDF — próximamente (Fase 10c)')
+  function handleOpen(book: LibraryBook) {
+    setViewing(book)
   }
 
   if (loading) {
@@ -112,6 +117,37 @@ function LibraryPage() {
           onUpdated={handleUpdated}
         />
       )}
+
+      <Sheet open={!!viewing} onOpenChange={(v) => { if (!v) setViewing(null) }}>
+        <SheetContent side="right" className="w-full sm:max-w-2xl p-0 flex flex-col">
+          <SheetHeader className="px-4 pt-4 pb-0 shrink-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <SheetTitle className="text-base font-medium truncate">
+                  {viewing?.title}
+                </SheetTitle>
+                {viewing?.author && (
+                  <p className="text-xs text-muted-foreground mt-0.5">{viewing.author}</p>
+                )}
+              </div>
+              <Button
+                variant="ghost" size="icon" className="size-7 shrink-0"
+                onClick={() => setViewing(null)}
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+          </SheetHeader>
+          <div className="flex-1 min-h-0 mt-3">
+            {viewing && (
+              <PdfViewer
+                storagePath={viewing.storage_path}
+                className="h-full"
+              />
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

@@ -947,15 +947,15 @@ export type BookCitation = {
 - [ ] Vista detalle libro: lista de notas que lo citan agrupadas por módulo (`listNotesCitingBook`) *(placeholder "próximamente" — implementar en 10c/10d cuando existan citas)*
 
 #### 10c — PDF Viewer component (reusable)
-- [ ] Instalar `react-pdf pdfjs-dist`
-- [ ] Configurar worker en Vite: `pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.js', import.meta.url).toString()`
-- [ ] `src/components/library/pdf-viewer.tsx` con props `{ storagePath, initialPage?, onPageChange?, className? }`:
-  - Resolver signed URL con caché in-memory (TTL 1h, refresh auto)
-  - `<Document>` + `<Page>` (renderTextLayer={false} por default — toggle si querés selección de texto)
-  - Virtualización: render página actual + 1 prev + 1 next, resto placeholder
-  - Controles: prev/next, input "ir a página N", zoom (+/-/fit-width), toggle text-layer
-  - Loading skeleton, error state si PDF corrupto / signed URL expira
-- [ ] Lazy import donde se use: `const PdfViewer = lazy(() => import('./pdf-viewer'))`
+- [x] `react-pdf pdfjs-dist` instalados (2026-05-05)
+- [x] Worker en `pdf-utils.ts`: `new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url)` + `optimizeDeps.exclude` vite.config (2026-05-05)
+- [x] `src/components/library/pdf-viewer.tsx`: props `{ storagePath, initialPage?, onPageChange?, className? }` (2026-05-05)
+  - Signed URL con caché TTL 1h (queries.ts)
+  - `<Document>` + `<Page>` react-pdf, `renderTextLayer={false}`
+  - ResizeObserver → fit-width auto
+  - Controles: prev/next, input página, zoom ±15%, fit-width toggle
+  - Loading skeleton + error state
+- [x] Integrado en `/library`: click libro → Sheet lateral con PdfViewer (2026-05-05)
 
 #### 10d — Citas de libros en notas Faculty
 - [ ] Tiptap extension custom `BookCitation` (nodo inline atómico):
