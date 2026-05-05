@@ -788,6 +788,38 @@ export type MoodLog = {
 - [x] Progress bar por materia: % topics dominados / total
 - [x] Vista agregada: `subject.progress = topics dominados / topics total`
 
+#### 9a.5 — Jerarquía de temario (Parcial > Unidad > Tema)
+
+> **Motivación:** poder ver cuánto falta estudiar para un parcial en base a sus unidades y los temas dentro de cada unidad.
+
+**Estructura de datos:**
+- `faculty_topic_groups` tabla nueva: `id, user_id, subject_id, title, order_index, created_at`
+  - Ejemplo de grupos: "Parcial 1", "Parcial 2", "Final"
+- `faculty_topic_units` tabla nueva: `id, user_id, subject_id, group_id, title, order_index, created_at`
+  - Ejemplo de unidades dentro de "Parcial 1": "Unidad 1 – Introducción", "Unidad 2 – Redes"
+- `faculty_topics` (ya existe) agrega FK `unit_id uuid references faculty_topic_units`
+  - Temas sin unidad asignada siguen funcionando (unit_id nullable)
+
+**Migración:**
+- [ ] `supabase/migrations/0004b_faculty_topic_groups.sql`: crear `faculty_topic_groups` y `faculty_topic_units`, agregar columna `unit_id` a `faculty_topics` (nullable, FK)
+
+**Tipos y queries:**
+- [ ] Agregar `FacultyTopicGroup`, `FacultyTopicUnit` a `src/lib/faculty/types.ts`
+- [ ] CRUD para ambas tablas en `src/lib/faculty/queries.ts`
+- [ ] Helper `listTopicsStructured(subjectId)`: retorna grupos con sus unidades y cada unidad con sus temas (árbol anidado)
+- [ ] Actualizar `listAllTopicsProgress()` y `getDashboardStats()` para respetar la nueva estructura
+
+**UI — `TopicList` refactor:**
+- [ ] Vista jerárquica colapsable: grupo (ej. "Parcial 1") > unidad (ej. "Unidad 2") > tema
+- [ ] CRUD inline para grupos: agregar/renombrar/eliminar grupo (▲▼ reorder)
+- [ ] CRUD inline para unidades dentro de cada grupo: agregar/renombrar/eliminar (▲▼ reorder)
+- [ ] Temas sin grupo/unidad van a sección "Sin clasificar"
+- [ ] Progress bar por grupo (% temas dominados en ese parcial): permite saber cuánto falta para cada parcial
+- [ ] Progress bar por unidad (% temas dominados en esa unidad)
+- [ ] Select de unidad en `NoteEditor` (reemplaza el select plano de topic por grupo > unidad > tema)
+
+**Salida:** `/faculty/$subjectId` temario tab muestra árbol Parcial > Unidad > Tema con progress bars anidados.
+
 #### 9b — Grades tracker
 - [ ] Tabla calificaciones por materia (todas las notas con `grade not null`)
 - [ ] Promedio por materia (avg grade en notas tp/parcial/final)
