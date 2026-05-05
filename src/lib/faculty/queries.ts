@@ -353,7 +353,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const now = new Date()
   const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
 
-  const [subjectsRes, deadlinesRes, gradesRes] = await Promise.all([
+  const [subjectsRes, deadlinesRes, aprobadasRes] = await Promise.all([
     supabase
       .from('faculty_subjects')
       .select('id', { count: 'exact', head: true })
@@ -364,20 +364,67 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       .eq('done', false)
       .gte('due_at', now.toISOString())
       .lte('due_at', nextWeek.toISOString()),
-    supabase.from('faculty_notes').select('grade').not('grade', 'is', null),
+    supabase.from('faculty_subjects').select('id').eq('status', 'aprobada'),
   ])
 
   if (subjectsRes.error) throw subjectsRes.error
   if (deadlinesRes.error) throw deadlinesRes.error
-  if (gradesRes.error) throw gradesRes.error
+  if (aprobadasRes.error) throw aprobadasRes.error
 
-  const grades = (gradesRes.data as { grade: number }[]).map((r) => r.grade)
-  const avgGrade =
-    grades.length > 0 ? Math.round((grades.reduce((a, b) => a + b, 0) / grades.length) * 10) / 10 : null
+  const aprobadasIds = (aprobadasRes.data as { id: string }[]).map((r) => r.id)
+
+  let avgGrade: number | null = null
+  if (aprobadasIds.length > 0) {
+    const { data: gradesData, error: gradesError } = await supabase
+      .from('faculty_notes')
+      .select('grade')
+      .in('subject_id', aprobadasIds)
+      .not('grade', 'is', null)
+    if (gradesError) throw gradesError
+    const grades = (gradesData as { grade: number }[]).map((r) => r.grade)
+    if (grades.length > 0) {
+      avgGrade = Math.round((grades.reduce((a, b) => a + b, 0) / grades.length) * 10) / 10
+    }
+  }
 
   return {
     cursando: subjectsRes.count ?? 0,
     thisWeek: deadlinesRes.count ?? 0,
     avgGrade,
   }
+}
+
+// ── Grades by semester ─────────────────────────────────────────────────────
+
+export type GradesBySemester = Array<{ semester: string; avg: number; count: number }>
+
+export async function getGradesBySemester(): Promise<GradesBySemester> {
+  const [subjectsRes, notesRes] = await Promise.all([
+    supabase.from('faculty_subjects').select('id, semester'),
+    supabase.from('faculty_notes').select('subject_id, grade').not('grade', 'is', null),
+  ])
+  if (subjectsRes.error) throw subjectsRes.error
+  if (notesRes.error) throw notesRes.error
+
+  const semesterMap = new Map(
+    (subjectsRes.data as { id: string; semester: string | null }[]).map((s) => [
+      s.id,
+      s.semester ?? 'Sin semestre',
+    ]),
+  )
+
+  const bySemester = new Map<string, number[]>()
+  for (const note of notesRes.data as { subject_id: string; grade: number }[]) {
+    const sem = semesterMap.get(note.subject_id) ?? 'Sin semestre'
+    if (!bySemester.has(sem)) bySemester.set(sem, [])
+    bySemester.get(sem)!.push(note.grade)
+  }
+
+  return Array.from(bySemester.entries())
+    .map(([semester, grades]) => ({
+      semester,
+      avg: Math.round((grades.reduce((a, b) => a + b, 0) / grades.length) * 10) / 10,
+      count: grades.length,
+    }))
+    .sort((a, b) => a.semester.localeCompare(b.semester))
 }

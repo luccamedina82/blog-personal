@@ -6,8 +6,9 @@ import { FacultyShell } from '@/components/faculty/faculty-shell'
 import { SubjectGrid } from '@/components/faculty/subject-grid'
 import { SubjectForm } from '@/components/faculty/subject-form'
 import { CountdownBadge } from '@/components/faculty/countdown-badge'
-import { listFacultySubjects, listUpcomingDeadlines, getDashboardStats, listAllTopicsProgress } from '@/lib/faculty/queries'
-import type { DashboardStats, TopicProgress } from '@/lib/faculty/queries'
+import { listFacultySubjects, listUpcomingDeadlines, getDashboardStats, listAllTopicsProgress, getGradesBySemester } from '@/lib/faculty/queries'
+import type { DashboardStats, TopicProgress, GradesBySemester } from '@/lib/faculty/queries'
+import { GradesChart } from '@/components/faculty/grades-chart'
 import type { FacultySubject, FacultyDeadline } from '@/lib/faculty/types'
 
 export const Route = createFileRoute('/faculty/')({
@@ -19,17 +20,19 @@ function FacultyDashboard() {
   const [deadlines, setDeadlines] = useState<FacultyDeadline[]>([])
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [topicsProgress, setTopicsProgress] = useState<Record<string, TopicProgress>>({})
+  const [gradesBySemester, setGradesBySemester] = useState<GradesBySemester>([])
   const [loading, setLoading] = useState(true)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<FacultySubject | null>(null)
 
   useEffect(() => {
-    Promise.all([listFacultySubjects(), listUpcomingDeadlines(5), getDashboardStats(), listAllTopicsProgress()])
-      .then(([s, d, st, tp]) => {
+    Promise.all([listFacultySubjects(), listUpcomingDeadlines(5), getDashboardStats(), listAllTopicsProgress(), getGradesBySemester()])
+      .then(([s, d, st, tp, gs]) => {
         setSubjects(s)
         setDeadlines(d)
         setStats(st)
         setTopicsProgress(tp)
+        setGradesBySemester(gs)
       })
       .catch(() => toast.error('Error al cargar materias'))
       .finally(() => setLoading(false))
@@ -116,6 +119,8 @@ function FacultyDashboard() {
           )}
         </aside>
       </div>
+
+      {!loading && <GradesChart data={gradesBySemester} />}
 
       <SubjectForm
         open={formOpen}

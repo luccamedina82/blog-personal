@@ -835,11 +835,11 @@ export type MoodLog = {
 
 **Salida:** `/faculty/$subjectId` temario tab muestra árbol Parcial > Unidad > Tema con progress bars anidados.
 
-#### 9b — Grades tracker
-- [ ] Tabla calificaciones por materia (todas las notas con `grade not null`)
-- [ ] Promedio por materia (avg grade en notas tp/parcial/final)
-- [ ] Promedio general (avg sobre subjects aprobadas)
-- [ ] Gráfico recharts: evolución promedio por semestre
+#### 9b — Grades tracker ✓ (2026-05-05)
+- [x] Tabla calificaciones por materia (todas las notas con `grade not null`)
+- [x] Promedio por materia (avg grade en notas tp/parcial/final)
+- [x] Promedio general (avg sobre subjects aprobadas)
+- [x] Gráfico recharts: evolución promedio por semestre
 
 #### 9c — Backlinks `[[nota]]`
 - [ ] Parser markdown-ish en TextBlockEditor: detectar `[[título-nota]]`
