@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils'
 import { useState } from 'react'
-import { Info, Copy, Check } from 'lucide-react'
+import { Info, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react'
 
 export interface CodeAnnotation {
   /** 1-indexed line number that triggers this note */
@@ -69,10 +69,13 @@ export function InteractiveCodeBlock({
   code,
   annotations = [],
 }: InteractiveCodeBlockProps) {
+  const MAX_VISIBLE = 20
   const [active, setActive] = useState<number | null>(null)
   const [copied, setCopied] = useState(false)
+  const [visibleLines, setVisibleLines] = useState(MAX_VISIBLE)
 
   const lines = code.replace(/\n+$/, '').split('\n')
+  const totalLines = lines.length
   const annotated = new Map(annotations.map((a) => [a.line, a]))
   const activeNote = active !== null ? annotated.get(active) : null
 
@@ -114,7 +117,7 @@ export function InteractiveCodeBlock({
 
         {/* Code */}
         <pre className="font-mono text-[12.5px] leading-6 overflow-x-auto py-3">
-          {lines.map((line, i) => {
+          {lines.slice(0, Math.min(visibleLines, totalLines)).map((line, i) => {
             const lineNum = i + 1
             const note = annotated.get(lineNum)
             const isActive = active === lineNum
@@ -164,6 +167,30 @@ export function InteractiveCodeBlock({
             )
           })}
         </pre>
+        {totalLines > MAX_VISIBLE && (
+          <div className="flex items-center gap-4 px-4 py-2 border-t border-border/50">
+            {visibleLines < totalLines && (
+              <button
+                type="button"
+                onClick={() => setVisibleLines((v) => Math.min(v + MAX_VISIBLE, totalLines))}
+                className="flex items-center gap-1 text-[10px] text-muted-foreground/60 hover:text-primary transition-colors"
+              >
+                <ChevronDown className="size-3" />
+                {`Extend code block (${Math.min(MAX_VISIBLE, totalLines - visibleLines)} more lines)`}
+              </button>
+            )}
+            {visibleLines > MAX_VISIBLE && (
+              <button
+                type="button"
+                onClick={() => setVisibleLines((v) => Math.max(v - MAX_VISIBLE, MAX_VISIBLE))}
+                className="flex items-center gap-1 text-[10px] text-muted-foreground/60 hover:text-primary transition-colors"
+              >
+                <ChevronUp className="size-3" />
+                Collapse code block
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Side note */}

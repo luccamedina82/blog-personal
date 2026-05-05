@@ -365,7 +365,7 @@ function PostView({
           )}
         </header>
 
-        <div className="h-px bg-border/40 mb-10 max-w-2xl" />
+        <div className="h-px bg-border/40 mb-5 max-w-2xl" />
 
         <section className="space-y-8">
           {post.blocks.length === 0 ? (

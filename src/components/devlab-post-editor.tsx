@@ -9,6 +9,7 @@ import {
   ArrowUp, ArrowDown, Loader2,
 } from 'lucide-react'
 import type { DevLabBlock, CodeAnnotation, DevLabPost, PostDraft } from '@/lib/devlab/types'
+import { cn } from '@/lib/utils'
 
 // Re-export types consumed by devlab-section
 export type { DevLabBlock, PostDraft }
@@ -67,11 +68,17 @@ function CodeBlockEditor({
   isFirst: boolean
   isLast: boolean
 }) {
+  const MAX_LINES = 20
+
   const [newAnn, setNewAnn] = useState<CodeAnnotation>({ line: 1, title: '', body: '' })
   const [showAnnForm, setShowAnnForm] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
+  const [visibleLines, setVisibleLines] = useState(MAX_LINES)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const lineNumRef = useRef<HTMLDivElement>(null)
+
+  const lineCount = (block.code || '').split('\n').length
+  const displayLines = Math.min(visibleLines, lineCount)
 
   function handleScroll() {
     if (lineNumRef.current && textareaRef.current) {
@@ -143,30 +150,74 @@ function CodeBlockEditor({
                 className="w-16 h-8 rounded-md border border-border/60 bg-background/40 px-2.5 text-xs font-mono text-muted-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 transition-colors"
               />
             </div>
-            <div className="relative rounded-md border border-border/60 bg-background/60 focus-within:border-primary/30 transition-colors">
+            <div className="space-y-1">
               <div
-                aria-hidden
-                className="absolute inset-y-0 left-0 w-11 overflow-hidden bg-secondary/30 border-r border-border/60 rounded-l-md pointer-events-none select-none"
+                className="relative rounded-md border border-border/60 bg-background/60 focus-within:border-primary/30 transition-colors"
               >
-                <div ref={lineNumRef} className="py-2.5">
-                  {(block.code || '').split('\n').map((_, i) => (
-                    <div key={i} className="pr-2 text-right text-[12.5px] font-mono text-muted-foreground/40 leading-6 tabular-nums">
-                      {i + 1}
-                    </div>
-                  ))}
+                <div className="absolute inset-y-0 left-0 w-11 overflow-hidden bg-secondary/30 border-r border-border/60 rounded-l-md select-none z-10">
+                  <div ref={lineNumRef} className="py-2.5">
+                    {(block.code || '').split('\n').map((_, i) => {
+                      const lineNum = i + 1
+                      const hasNote = block.annotations.some((a) => a.line === lineNum)
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          title={`Add note at line ${lineNum}`}
+                          onClick={() => {
+                            setNewAnn((p) => ({ ...p, line: lineNum }))
+                            setShowAnnForm(true)
+                          }}
+                          className={cn(
+                            'w-full pr-2 text-right text-[12.5px] font-mono leading-6 tabular-nums transition-colors',
+                            hasNote
+                              ? 'text-primary/70 hover:text-primary'
+                              : 'text-muted-foreground/40 hover:text-primary/70',
+                          )}
+                        >
+                          {lineNum}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
+                <textarea
+                  ref={textareaRef}
+                  value={block.code}
+                  onChange={(e) => onChange({ ...block, code: e.target.value })}
+                  onKeyDown={handleTabKey}
+                  onScroll={handleScroll}
+                  placeholder={'// Paste your code here…'}
+                  rows={displayLines}
+                  wrap="off"
+                  spellCheck={false}
+                  className="w-full bg-transparent pl-12 pr-3 py-2.5 text-[12.5px] font-mono text-foreground/85 placeholder:text-muted-foreground/30 leading-6 resize-none outline-none overflow-x-auto"
+                />
               </div>
-              <textarea
-                ref={textareaRef}
-                value={block.code}
-                onChange={(e) => onChange({ ...block, code: e.target.value })}
-                onKeyDown={handleTabKey}
-                onScroll={handleScroll}
-                placeholder={'// Paste your code here…'}
-                rows={8}
-                spellCheck={false}
-                className="w-full bg-transparent pl-12 pr-3 py-2.5 text-[12.5px] font-mono text-foreground/85 placeholder:text-muted-foreground/30 leading-6 resize-y outline-none"
-              />
+              {lineCount > MAX_LINES && (
+                <div className="flex items-center gap-4">
+                  {visibleLines < lineCount && (
+                    <button
+                      type="button"
+                      onClick={() => setVisibleLines((v) => Math.min(v + MAX_LINES, lineCount))}
+                      className="flex items-center gap-1 text-[10px] text-muted-foreground/60 hover:text-primary transition-colors"
+                    >
+                      <ChevronDown className="size-3" />
+                      {`Extend code block (${Math.min(MAX_LINES, lineCount - visibleLines)} more lines)`}
+                    </button>
+                  )}
+                  {visibleLines > MAX_LINES && (
+                    <button
+                      type="button"
+                      onClick={() => setVisibleLines((v) => Math.max(v - MAX_LINES, MAX_LINES))}
+                      className="flex items-center gap-1 text-[10px] text-muted-foreground/60 hover:text-primary transition-colors"
+                    >
+                      <ChevronUp className="size-3" />
+                      Collapse code block
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -199,7 +250,7 @@ function CodeBlockEditor({
                   <div className="flex gap-2">
                     <div className="flex flex-col gap-1 w-16">
                       <label className="text-[10px] text-muted-foreground">Line</label>
-                      <input type="number" min={1} value={newAnn.line} onChange={(e) => setNewAnn((p) => ({ ...p, line: Number(e.target.value) }))}
+                      <input type="number" min={1} max={lineCount} value={newAnn.line} onChange={(e) => setNewAnn((p) => ({ ...p, line: Math.max(1, Math.min(Number(e.target.value), lineCount)) }))}
                         className="h-8 rounded-md border border-border/60 bg-background/40 px-2 text-xs font-mono text-foreground/80 outline-none focus:border-primary/40 transition-colors text-center" />
                     </div>
                     <div className="flex flex-col gap-1 flex-1">
