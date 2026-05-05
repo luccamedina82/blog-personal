@@ -294,15 +294,14 @@ function PostView({
   onDelete: () => void
 }) {
   return (
-    <article className="px-6 lg:px-14 py-10 lg:py-16 max-w-4xl">
-      <div className="flex items-center justify-between mb-8">
-        <nav className="flex items-center gap-2 text-xs text-muted-foreground">
-          <button type="button" onClick={onBack}
-            className="flex items-center gap-1.5 hover:text-foreground transition-colors">
-            <ArrowLeft className="size-3.5" />
-            {category.label}
-          </button>
-        </nav>
+    <div className="flex flex-col min-h-full">
+      {/* Sticky nav bar */}
+      <div className="sticky top-0 z-10 flex items-center justify-between px-6 lg:px-10 py-3 border-b border-border/50 bg-background/80 backdrop-blur-md">
+        <button type="button" onClick={onBack}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="size-3.5" />
+          {category.label}
+        </button>
         <div className="flex items-center gap-1">
           <button type="button" onClick={onEdit}
             className="flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs text-muted-foreground hover:text-foreground border border-border/60 hover:border-border transition-colors">
@@ -334,48 +333,52 @@ function PostView({
         </div>
       </div>
 
-      <header className="mb-10">
-        <div className="flex items-center gap-3 text-[11px] text-muted-foreground mb-4">
-          <span className="text-primary uppercase tracking-[0.18em]">{category.label}</span>
-          <span className="size-0.5 rounded-full bg-muted-foreground/40" />
-          <span className="flex items-center gap-1">
-            <CalendarDays className="size-3" />
-            {new Date(post.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-          </span>
-          {post.reading_time && (
-            <>
-              <span className="size-0.5 rounded-full bg-muted-foreground/40" />
-              <span className="flex items-center gap-1">
-                <Clock className="size-3" />
-                {post.reading_time} read
-              </span>
-            </>
+      <article className="flex-1 px-6 lg:px-10 py-10 lg:py-14">
+        <header className="mb-10 max-w-2xl">
+          <div className="flex items-center gap-3 text-[11px] text-muted-foreground mb-5">
+            <span className="text-primary uppercase tracking-[0.18em] font-medium">{category.label}</span>
+            <span className="size-0.5 rounded-full bg-muted-foreground/40" />
+            <span className="flex items-center gap-1">
+              <CalendarDays className="size-3" />
+              {new Date(post.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </span>
+            {post.reading_time && (
+              <>
+                <span className="size-0.5 rounded-full bg-muted-foreground/40" />
+                <span className="flex items-center gap-1">
+                  <Clock className="size-3" />
+                  {post.reading_time} read
+                </span>
+              </>
+            )}
+          </div>
+          <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-balance leading-tight">{post.title}</h1>
+          {post.excerpt && (
+            <p className="mt-4 text-base text-muted-foreground leading-relaxed text-pretty">{post.excerpt}</p>
           )}
-        </div>
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-balance leading-snug">{post.title}</h1>
-        {post.excerpt && (
-          <p className="mt-4 text-[15px] text-muted-foreground leading-relaxed text-pretty max-w-2xl">{post.excerpt}</p>
-        )}
-        {post.tags.length > 0 && (
-          <div className="mt-5 flex flex-wrap gap-1.5">
-            {post.tags.map((t) => (
-              <Badge key={t} variant="secondary" className="rounded-md text-[10px] font-mono font-normal bg-secondary/50 border border-border/60">{t}</Badge>
-            ))}
-          </div>
-        )}
-      </header>
+          {post.tags.length > 0 && (
+            <div className="mt-5 flex flex-wrap gap-1.5">
+              {post.tags.map((t) => (
+                <Badge key={t} variant="secondary" className="rounded-md text-[10px] font-mono font-normal bg-secondary/50 border border-border/60">{t}</Badge>
+              ))}
+            </div>
+          )}
+        </header>
 
-      <section className="space-y-6">
-        {post.blocks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
-            <BookOpen className="size-8 text-muted-foreground/30" />
-            <p className="text-sm text-muted-foreground">No content yet.</p>
-          </div>
-        ) : (
-          post.blocks.map((block) => <BlockRenderer key={block.id} block={block} />)
-        )}
-      </section>
-    </article>
+        <div className="h-px bg-border/40 mb-10 max-w-2xl" />
+
+        <section className="space-y-8">
+          {post.blocks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-4 py-20 text-center max-w-2xl">
+              <BookOpen className="size-8 text-muted-foreground/30" />
+              <p className="text-sm text-muted-foreground">No content yet.</p>
+            </div>
+          ) : (
+            post.blocks.map((block) => <BlockRenderer key={block.id} block={block} />)
+          )}
+        </section>
+      </article>
+    </div>
   )
 }
 
@@ -383,24 +386,26 @@ function BlockRenderer({ block }: { block: DevLabBlock }) {
   if (block.kind === 'text') {
     return (
       <div
-        className="tiptap-render"
+        className="tiptap-render max-w-2xl"
         dangerouslySetInnerHTML={{ __html: block.html }}
       />
     )
   }
   if (block.kind === 'code') {
     return (
-      <InteractiveCodeBlock
-        language={block.language}
-        filename={block.filename || undefined}
-        code={block.code}
-        annotations={block.annotations}
-      />
+      <div className="max-w-5xl">
+        <InteractiveCodeBlock
+          language={block.language}
+          filename={block.filename || undefined}
+          code={block.code}
+          annotations={block.annotations}
+        />
+      </div>
     )
   }
   if (block.kind === 'quote') {
     return (
-      <blockquote className="border-l-2 border-primary/50 pl-5 py-1 text-[15px] text-foreground/80 italic">
+      <blockquote className="max-w-2xl border-l-2 border-primary/50 pl-5 py-1 text-[15px] text-foreground/80 italic">
         &ldquo;{block.content}&rdquo;
         {block.attribution && (
           <footer className="mt-1 text-xs text-muted-foreground not-italic">{block.attribution}</footer>
@@ -409,7 +414,11 @@ function BlockRenderer({ block }: { block: DevLabBlock }) {
     )
   }
   if (block.kind === 'image') {
-    return <SignedImage path={block.storage_path} alt={block.alt} />
+    return (
+      <div className="max-w-3xl">
+        <SignedImage path={block.storage_path} alt={block.alt} />
+      </div>
+    )
   }
   return null
 }

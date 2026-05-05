@@ -70,6 +70,29 @@ function CodeBlockEditor({
   const [newAnn, setNewAnn] = useState<CodeAnnotation>({ line: 1, title: '', body: '' })
   const [showAnnForm, setShowAnnForm] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const lineNumRef = useRef<HTMLDivElement>(null)
+
+  function handleScroll() {
+    if (lineNumRef.current && textareaRef.current) {
+      lineNumRef.current.style.transform = `translateY(-${textareaRef.current.scrollTop}px)`
+    }
+  }
+
+  function handleTabKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key !== 'Tab') return
+    e.preventDefault()
+    const ta = e.currentTarget
+    const start = ta.selectionStart
+    const end = ta.selectionEnd
+    const next = ta.value.substring(0, start) + '  ' + ta.value.substring(end)
+    onChange({ ...block, code: next })
+    requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        textareaRef.current.selectionStart = textareaRef.current.selectionEnd = start + 2
+      }
+    })
+  }
 
   function addAnnotation() {
     if (!newAnn.title.trim()) return
@@ -120,14 +143,31 @@ function CodeBlockEditor({
                 className="w-16 h-8 rounded-md border border-border/60 bg-background/40 px-2.5 text-xs font-mono text-muted-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 transition-colors"
               />
             </div>
-            <textarea
-              value={block.code}
-              onChange={(e) => onChange({ ...block, code: e.target.value })}
-              placeholder={'// Paste your code here…'}
-              rows={8}
-              spellCheck={false}
-              className="w-full rounded-md border border-border/60 bg-background/60 px-3 py-2.5 text-[12.5px] font-mono text-foreground/85 placeholder:text-muted-foreground/30 leading-6 resize-y outline-none focus:border-primary/30 transition-colors"
-            />
+            <div className="relative rounded-md border border-border/60 bg-background/60 focus-within:border-primary/30 transition-colors">
+              <div
+                aria-hidden
+                className="absolute inset-y-0 left-0 w-11 overflow-hidden bg-secondary/30 border-r border-border/60 rounded-l-md pointer-events-none select-none"
+              >
+                <div ref={lineNumRef} className="py-2.5">
+                  {(block.code || '').split('\n').map((_, i) => (
+                    <div key={i} className="pr-2 text-right text-[12.5px] font-mono text-muted-foreground/40 leading-6 tabular-nums">
+                      {i + 1}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <textarea
+                ref={textareaRef}
+                value={block.code}
+                onChange={(e) => onChange({ ...block, code: e.target.value })}
+                onKeyDown={handleTabKey}
+                onScroll={handleScroll}
+                placeholder={'// Paste your code here…'}
+                rows={8}
+                spellCheck={false}
+                className="w-full bg-transparent pl-12 pr-3 py-2.5 text-[12.5px] font-mono text-foreground/85 placeholder:text-muted-foreground/30 leading-6 resize-y outline-none"
+              />
+            </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
