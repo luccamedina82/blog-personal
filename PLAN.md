@@ -255,6 +255,120 @@ create policy "owner_all" on decks
 
 > **Nota:** repetir policy `owner_all` para cada tabla. En Fase 0 escribir un loop SQL o repetir manual. RLS desde día 1 evita refactor mañana.
 
+### Schema Faculty + Personal (Fases 8–10)
+
+```sql
+-- supabase/migrations/000X_faculty.sql
+
+-- Faculty
+create table faculty_subjects (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  code text,                       -- "MAT-101"
+  status text not null check (status in ('cursando','final-pendiente','aprobada','recursar')) default 'cursando',
+  semester text,                   -- "2026-1C"
+  professor text,
+  credits integer,
+  color text,                      -- hex UI
+  created_at timestamptz default now()
+);
+
+create table faculty_topics (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  subject_id uuid not null references faculty_subjects(id) on delete cascade,
+  title text not null,
+  order_index integer default 0,
+  status text check (status in ('pendiente','visto','dominado')) default 'pendiente',
+  created_at timestamptz default now()
+);
+
+create table faculty_notes (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  subject_id uuid not null references faculty_subjects(id) on delete cascade,
+  topic_id uuid references faculty_topics(id) on delete set null,
+  kind text not null check (kind in ('clase','apunte','tp','parcial','final')),
+  title text not null,
+  date date,                       -- fecha clase / entrega
+  blocks jsonb default '[]',       -- reuso DevLab block model
+  tags text[] default '{}',
+  grade numeric,                   -- nota TP/parcial/final
+  created_at timestamptz default now()
+);
+
+create table faculty_deadlines (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  subject_id uuid not null references faculty_subjects(id) on delete cascade,
+  kind text not null check (kind in ('tp','parcial','final','recuperatorio','entrega')),
+  title text not null,
+  due_at timestamptz not null,
+  done boolean default false,
+  note text,
+  created_at timestamptz default now()
+);
+
+alter table faculty_subjects  enable row level security;
+alter table faculty_topics    enable row level security;
+alter table faculty_notes     enable row level security;
+alter table faculty_deadlines enable row level security;
+-- policy owner_all en cada una
+
+-- supabase/migrations/000Y_personal.sql
+
+-- Personal
+create table habits (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  cue text,                        -- atomic habits trigger
+  frequency text not null check (frequency in ('daily','weekly')) default 'daily',
+  weekly_target integer,           -- usado si frequency=weekly
+  color text,
+  archived boolean default false,
+  created_at timestamptz default now()
+);
+
+create table habit_logs (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  habit_id uuid not null references habits(id) on delete cascade,
+  log_date date not null,
+  unique (habit_id, log_date)
+);
+
+create table tasks (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  title text not null,
+  notes text,
+  priority text check (priority in ('p1','p2','p3','p4')) default 'p3',
+  due_date date,
+  done boolean default false,
+  done_at timestamptz,
+  recurring text check (recurring in ('daily','weekly')),
+  created_at timestamptz default now()
+);
+
+create table mood_logs (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  log_date date not null,
+  mood integer check (mood between 1 and 5),
+  energy integer check (energy between 1 and 5),
+  note text,
+  unique (user_id, log_date)
+);
+
+alter table habits     enable row level security;
+alter table habit_logs enable row level security;
+alter table tasks      enable row level security;
+alter table mood_logs  enable row level security;
+-- policy owner_all en cada una
+```
+
 ---
 
 ## 4. Tipos TypeScript (mirror del schema)
@@ -329,6 +443,98 @@ export type DailyTip = {
   example: string
   register: 'casual' | 'neutral' | 'formal'
   source?: string
+}
+
+// Faculty (Fase 8-9)
+export type FacultySubject = {
+  id: string
+  user_id: string
+  name: string
+  code: string | null
+  status: 'cursando' | 'final-pendiente' | 'aprobada' | 'recursar'
+  semester: string | null
+  professor: string | null
+  credits: number | null
+  color: string | null
+  created_at: string
+}
+
+export type FacultyTopic = {
+  id: string
+  user_id: string
+  subject_id: string
+  title: string
+  order_index: number
+  status: 'pendiente' | 'visto' | 'dominado'
+  created_at: string
+}
+
+export type FacultyNote = {
+  id: string
+  user_id: string
+  subject_id: string
+  topic_id: string | null
+  kind: 'clase' | 'apunte' | 'tp' | 'parcial' | 'final'
+  title: string
+  date: string | null
+  blocks: unknown[]                 // reuso DevLab block shape
+  tags: string[]
+  grade: number | null
+  created_at: string
+}
+
+export type FacultyDeadline = {
+  id: string
+  user_id: string
+  subject_id: string
+  kind: 'tp' | 'parcial' | 'final' | 'recuperatorio' | 'entrega'
+  title: string
+  due_at: string
+  done: boolean
+  note: string | null
+  created_at: string
+}
+
+// Personal (Fase 10)
+export type Habit = {
+  id: string
+  user_id: string
+  name: string
+  cue: string | null
+  frequency: 'daily' | 'weekly'
+  weekly_target: number | null
+  color: string | null
+  archived: boolean
+  created_at: string
+}
+
+export type HabitLog = {
+  id: string
+  user_id: string
+  habit_id: string
+  log_date: string
+}
+
+export type Task = {
+  id: string
+  user_id: string
+  title: string
+  notes: string | null
+  priority: 'p1' | 'p2' | 'p3' | 'p4'
+  due_date: string | null
+  done: boolean
+  done_at: string | null
+  recurring: 'daily' | 'weekly' | null
+  created_at: string
+}
+
+export type MoodLog = {
+  id: string
+  user_id: string
+  log_date: string
+  mood: number | null
+  energy: number | null
+  note: string | null
 }
 ```
 
@@ -529,7 +735,126 @@ export type DailyTip = {
 
 ---
 
-### Fase 8 — IA real (cuando justifique pagar)
+### Fase 8 — Faculty MVP (2-3 días)
+
+> Inicio módulo `/faculty`. Empezar limpio (no importar Notion). Reusa `DevLabPostEditor` (Tiptap) para notas. Sin KaTeX, sin pomodoro/gym (decisión 2026-05-04).
+
+#### 8a — Setup ruta + schema
+- [ ] Migración SQL `supabase/migrations/0004_faculty.sql`: 4 tablas (subjects/topics/notes/deadlines) + RLS owner_all
+- [ ] Correr migración en Supabase SQL editor
+- [ ] Crear `src/lib/faculty/types.ts` con `FacultySubject`, `FacultyTopic`, `FacultyNote`, `FacultyDeadline`
+- [ ] Crear `src/lib/faculty/queries.ts`: list/create/update/delete para subjects + notes + deadlines
+- [ ] Agregar `/faculty` al header nav (entre `/devlab` y `/english`)
+- [ ] `src/routes/faculty/index.tsx` → dashboard (próximos deadlines + grid materias)
+- [ ] `src/routes/faculty/$subjectId.tsx` → vista materia individual
+- [ ] `src/components/faculty/faculty-shell.tsx` (header + back nav)
+
+#### 8b — Subjects CRUD
+- [ ] `SubjectGrid`: cards por materia con name, code, semester, status badge, color
+- [ ] `SubjectForm` modal: name, code, semester, professor, credits, color picker, status select
+- [ ] Filtro por status (cursando / final-pendiente / aprobada / recursar)
+- [ ] Eliminar materia con `AlertDialog` (cascade borra notas + deadlines)
+- [ ] Color como border-left de card para identificar visualmente
+
+#### 8c — Notes CRUD por materia
+- [ ] `NotesList` dentro de `SubjectDetail`: filtros por kind (clase / apunte / tp / parcial / final)
+- [ ] `NoteEditor` reusando `DevLabPostEditor` (Tiptap, blocks jsonb)
+- [ ] Campos extra: `kind` select, `date` (date picker), `grade` (solo para tp/parcial/final), `tags`
+- [ ] `NoteView` reusando estilos `.tiptap-render` de DevLab
+- [ ] Cross-link "→ Anki" en notas (reusar `SaveToAnkiButton`, `source_kind='faculty'`)
+
+#### 8d — Deadlines lista + countdown
+- [ ] `DeadlineList`: orden por `due_at asc`, separador hoy/semana/mes/después
+- [ ] `DeadlineForm` modal: subject_id, kind, title, due_at (datetime-local), note
+- [ ] Toggle `done` con checkbox
+- [ ] `CountdownBadge`: "en 3 días", "mañana", "vencido" — color según urgencia
+- [ ] Widget "próximos deadlines" en dashboard `/faculty` (top 5)
+- [ ] Eliminar deadline con confirm
+
+#### 8e — Dashboard
+- [ ] `/faculty/index.tsx`: grid materias activas + próximos 5 deadlines + count tareas pendientes
+- [ ] Stat cards: materias cursando, deadlines esta semana, promedio general
+
+**Salida:** `/faculty` operativo — materias CRUD, notas Tiptap por materia, deadlines lista con countdown.
+
+---
+
+### Fase 9 — Faculty avanzado (1-2 días)
+
+#### 9a — Topics + progreso
+- [ ] CRUD `faculty_topics` por materia (programa de la materia)
+- [ ] `TopicList` con drag-handle (botones ▲▼ primero) y status select (pendiente/visto/dominado)
+- [ ] Asociar nota a topic via `topic_id` (select en `NoteEditor`)
+- [ ] Progress bar por materia: % topics dominados / total
+- [ ] Vista agregada: `subject.progress = topics dominados / topics total`
+
+#### 9b — Grades tracker
+- [ ] Tabla calificaciones por materia (todas las notas con `grade not null`)
+- [ ] Promedio por materia (avg grade en notas tp/parcial/final)
+- [ ] Promedio general (avg sobre subjects aprobadas)
+- [ ] Gráfico recharts: evolución promedio por semestre
+
+#### 9c — Backlinks `[[nota]]`
+- [ ] Parser markdown-ish en TextBlockEditor: detectar `[[título-nota]]`
+- [ ] Autocomplete al escribir `[[`: sugiere notas existentes (cross-materia)
+- [ ] Renderer: link clickeable en `NoteView`
+- [ ] Vista "referenciada por" en `NoteView` (incoming links query)
+
+#### 9d — Export PDF apunte
+- [ ] Instalar `jspdf` + `html2canvas` o `react-pdf`
+- [ ] Botón "Export PDF" en `NoteView` → renderiza HTML de tiptap a PDF
+- [ ] Header con materia + fecha + título
+
+**Salida:** progreso visible por materia, calificaciones agregadas, notas linkeadas, export imprimible.
+
+---
+
+### Fase 10 — Personal (2 días)
+
+> Módulo `/personal`. Solo habits + tasks + mood. Sin pomodoro, sin gym (decisión 2026-05-04 — apps dedicadas son mejores).
+
+#### 10a — Setup
+- [ ] Migración SQL `supabase/migrations/0005_personal.sql`: habits, habit_logs, tasks, mood_logs + RLS
+- [ ] `src/lib/personal/types.ts`: `Habit`, `HabitLog`, `Task`, `MoodLog`
+- [ ] `src/lib/personal/queries.ts`: CRUD para 4 tablas + helpers (toggleHabitLog por fecha, listTasksByPriority)
+- [ ] Agregar `/personal` al header nav
+- [ ] `src/routes/personal/index.tsx` → dashboard
+- [ ] Tabs internos: Habits | Tasks | Mood (similar a `EnglishShell`)
+
+#### 10b — Habits
+- [ ] `HabitsList`: lista con nombre, cue, frequency, racha actual, racha máxima
+- [ ] `HabitForm` modal: name, cue (atomic habits trigger), frequency (daily/weekly), weekly_target, color
+- [ ] Toggle día actual: click en habit → upsert/delete `habit_logs` para hoy
+- [ ] `HabitHeatmap`: grid GitHub-style último año (lib `react-calendar-heatmap` o SVG custom)
+- [ ] Streak counter: días consecutivos cumpliendo (query group by date)
+- [ ] Best streak histórico
+- [ ] Archivar hábito (soft delete con `archived=true`)
+
+#### 10c — Tasks Eisenhower
+- [ ] `TaskBoard`: 4 cuadrantes (P1 urgente+importante, P2 importante, P3 urgente, P4 ni)
+- [ ] `TaskForm` modal: title, notes, priority, due_date, recurring
+- [ ] Toggle `done` con checkbox + `done_at = now()`
+- [ ] Filtros: hoy / esta semana / vencidas / completadas
+- [ ] Tareas recurrentes: al marcar done, auto-crear próxima instancia (daily → mañana, weekly → +7d)
+- [ ] Eliminar tarea con confirm
+
+#### 10d — Mood log
+- [ ] Quick-log: 1 click hoy → emoji selector (1-5 mood + 1-5 energy)
+- [ ] Nota corta opcional
+- [ ] Heatmap mensual (grid emojis por día)
+- [ ] Gráfico recharts: tendencia mood/energy últimos 30 días
+
+#### 10e — Dashboard `/personal`
+- [ ] Hábitos hoy (checklist quick-toggle)
+- [ ] Tareas P1 + vencidas
+- [ ] Mood hoy (si no logueado, prompt)
+- [ ] Stats semana: % hábitos cumplidos, tareas done, mood avg
+
+**Salida:** `/personal` con habits heatmap + tasks Eisenhower + mood tracking.
+
+---
+
+### Fase 11 — IA real (cuando justifique pagar)
 
 > Acá aparece la pregunta NestJS vs Edge Functions. Decisión deferida hasta llegar.
 
@@ -551,22 +876,13 @@ export type DailyTip = {
 
 ## 6. Módulos aparte (futuros)
 
-### `/faculty` — Apuntes facultad
+> `/faculty` y `/personal` movidos a Fases 8-10 (2026-05-04). Esta sección queda para otros módulos futuros.
 
-- [ ] Tablas: `faculty_subjects`, `faculty_notes`, `faculty_exams`
-- [ ] Apuntes por materia (reusar `DevLabPostEditor`)
-- [ ] Soporte fórmulas: integrar KaTeX (`npm i katex react-katex`)
-- [ ] Calendario exámenes / deadlines
-- [ ] Tracker progreso por materia
+### Posibles futuros
 
-### `/personal` — Habits + journal privado
-
-- [ ] Tablas: `habits`, `habit_logs`, `journal_prompts`, `mood_logs`
-- [ ] Habits tracker (grid tipo GitHub contributions)
-- [ ] Journal prompts diarios
-- [ ] Pomodoro timer (estado en localStorage, sesiones a DB)
-- [ ] Mood tracking
-- [ ] Privado: ya está protegido por RLS + auth
+- [ ] `/finance` — gastos + presupuesto (descartado scope creep, reconsiderar)
+- [ ] `/reading` — separar libros del módulo english si crece mucho
+- [ ] `/projects` — gestión side-projects fuera DevLab (PMO style)
 
 ---
 
@@ -586,6 +902,15 @@ export type DailyTip = {
 | **Test coverage** | Sin tests aún | Cuando estabilice arquitectura |
 | **Mobile responsive review** | Layouts pensados desktop-first | Auditoría al final de fase 6 |
 | **Migrations versionadas** | SQL manual al principio | Adoptar Supabase CLI + migrations dir cuando haya 3+ migrations |
+| **Calendario faculty (vista mes)** | Lista + countdown cubre Fase 8 | Cuando lista deadlines crezca >30 items. Lib: `react-day-picker` o custom grid mes |
+| **KaTeX en faculty notes** | Sin materias mate/física por ahora | Si aparecen. `@tiptap/extension-mathematics` o `katex` + custom extension |
+| **Pomodoro** | Apps dedicadas (Forest, Be Focused) ya cubren | No prioridad — solo si querés tiempo linkeado a tareas/materias |
+| **Gym tracker** | Usuario usa app dedicada | No reactivar salvo cambio de tooling |
+| **Import desde Notion** | Decisión empezar limpio (2026-05-04) | Si hay >100 notas valiosas a migrar. Notion exporta MD/CSV — parser custom |
+| **Drag-and-drop bloques (DevLab + Faculty notes)** | Botones ▲▼ funcionan | `@dnd-kit/core` cuando moleste |
+| **Backlinks `[[nota]]`** | Notas planas en Fase 8 | Fase 9 — parser + autocomplete |
+| **Export PDF apuntes** | Fase 9 | `jspdf` o `react-pdf` |
+| **Tareas recurrentes auto-rollover** | Manual primero | Edge function cron o trigger client-side al login |
 
 ---
 
@@ -661,7 +986,7 @@ VITE_SUPABASE_ANON_KEY
 ---
 
 **Última actualización:** 2026-05-04
-**Estado:** Fases 0–7 COMPLETAS. DevLab: CRUD categorías + posts en Supabase, editor Tiptap (B/I/U/H1-H3/listas/blockquote/imágenes), reorden bloques ▲▼. Siguiente: decidir Fase 8 (IA real) o iniciar módulos /faculty o /personal.
+**Estado:** Fases 0–7 COMPLETAS. Roadmap extendido con Fase 8 (Faculty MVP), Fase 9 (Faculty avanzado), Fase 10 (Personal habits+tasks+mood), Fase 11 (IA real, ex-Fase 8). Decisiones 2026-05-04: lista+countdown deadlines (no calendario), sin KaTeX, sin pomodoro, sin gym, empezar limpio sin Notion import. Siguiente: ejecutar Fase 8a (migración SQL faculty + setup ruta).
 
 
 
