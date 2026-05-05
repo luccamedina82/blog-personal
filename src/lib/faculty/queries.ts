@@ -394,6 +394,41 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   }
 }
 
+// ── Backlinks ──────────────────────────────────────────────────────────────
+
+export async function listAllNotesSummary(): Promise<
+  Array<{ id: string; title: string; subject_id: string; kind: FacultyNote['kind'] }>
+> {
+  const { data, error } = await supabase
+    .from('faculty_notes')
+    .select('id, title, subject_id, kind')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data as Array<{ id: string; title: string; subject_id: string; kind: FacultyNote['kind'] }>
+}
+
+export async function listNotesReferencingTitle(
+  title: string,
+  excludeNoteId: string,
+): Promise<Array<{ id: string; title: string; subject_id: string; kind: FacultyNote['kind'] }>> {
+  const needle = `[[${title}]]`
+  const { data, error } = await supabase
+    .from('faculty_notes')
+    .select('id, title, subject_id, kind, blocks')
+  if (error) throw error
+  return (
+    data as Array<{
+      id: string
+      title: string
+      subject_id: string
+      kind: FacultyNote['kind']
+      blocks: unknown
+    }>
+  )
+    .filter((n) => n.id !== excludeNoteId && JSON.stringify(n.blocks).includes(needle))
+    .map(({ blocks: _b, ...rest }) => rest)
+}
+
 // ── Grades by semester ─────────────────────────────────────────────────────
 
 export type GradesBySemester = Array<{ semester: string; avg: number; count: number }>

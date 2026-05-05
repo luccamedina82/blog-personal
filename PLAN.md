@@ -841,11 +841,11 @@ export type MoodLog = {
 - [x] Promedio general (avg sobre subjects aprobadas)
 - [x] Gráfico recharts: evolución promedio por semestre
 
-#### 9c — Backlinks `[[nota]]`
-- [ ] Parser markdown-ish en TextBlockEditor: detectar `[[título-nota]]`
-- [ ] Autocomplete al escribir `[[`: sugiere notas existentes (cross-materia)
-- [ ] Renderer: link clickeable en `NoteView`
-- [ ] Vista "referenciada por" en `NoteView` (incoming links query)
+#### 9c — Backlinks `[[nota]]` ✓ (2026-05-05)
+- [x] Parser markdown-ish en TextBlockEditor: detectar `[[título-nota]]`
+- [x] Autocomplete al escribir `[[`: sugiere notas existentes (cross-materia)
+- [x] Renderer: link clickeable en `NoteView`
+- [x] Vista "referenciada por" en `NoteView` (incoming links query)
 
 #### 9d — Export PDF apunte
 - [ ] Instalar `jspdf` + `html2canvas` o `react-pdf`

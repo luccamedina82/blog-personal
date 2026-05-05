@@ -4,6 +4,8 @@ import Underline from '@tiptap/extension-underline'
 import Placeholder from '@tiptap/extension-placeholder'
 import { Bold, Italic, Underline as UnderlineIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useState, useCallback } from 'react'
+import { useBacklinkSuggestions } from '@/lib/faculty/backlinks-context'
 
 interface TiptapEditorProps {
   value: string
@@ -13,6 +15,32 @@ interface TiptapEditorProps {
 }
 
 export function TiptapEditor({ value, onChange, placeholder, className }: TiptapEditorProps) {
+  const allSuggestions = useBacklinkSuggestions()
+  const [query, setQuery] = useState<string | null>(null)
+  const [activeIndex, setActiveIndex] = useState(0)
+
+  const filtered =
+    query !== null && allSuggestions.length > 0
+      ? allSuggestions
+          .filter((s) => s.title.toLowerCase().includes(query.toLowerCase()))
+          .slice(0, 8)
+      : []
+
+  const insertBacklink = useCallback(
+    (title: string) => {
+      if (!editor) return
+      const { from } = editor.state.selection
+      const textBefore = editor.state.doc.textBetween(Math.max(0, from - 200), from, '\n')
+      const match = textBefore.match(/\[\[([^\]]*)$/)
+      if (!match) return
+      const start = from - match[0].length
+      editor.chain().focus().deleteRange({ from: start, to: from }).insertContent(`[[${title}]]`).run()
+      setQuery(null)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  )
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ codeBlock: false }),
@@ -20,15 +48,41 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
       Placeholder.configure({ placeholder: placeholder ?? 'Write your content here…' }),
     ],
     content: value,
-    onUpdate({ editor }) {
-      onChange(editor.getHTML())
+    onUpdate({ editor: e }) {
+      onChange(e.getHTML())
+      if (allSuggestions.length === 0) return
+      const { from } = e.state.selection
+      const textBefore = e.state.doc.textBetween(Math.max(0, from - 200), from, '\n')
+      const match = textBefore.match(/\[\[([^\]]*)$/)
+      if (match) {
+        setQuery(match[1])
+        setActiveIndex(0)
+      } else {
+        setQuery(null)
+      }
     },
   })
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (query === null || filtered.length === 0) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActiveIndex((i) => Math.min(i + 1, filtered.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActiveIndex((i) => Math.max(i - 1, 0))
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault()
+      insertBacklink(filtered[activeIndex].title)
+    } else if (e.key === 'Escape') {
+      setQuery(null)
+    }
+  }
 
   if (!editor) return null
 
   return (
-    <div className={cn('flex flex-col', className)}>
+    <div className={cn('flex flex-col relative', className)}>
       {/* Static formatting toolbar */}
       <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-border/40 bg-background/20 flex-wrap">
         <ToolBtn active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} title="Bold (⌘B)">
@@ -69,7 +123,36 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
       <EditorContent
         editor={editor}
         className="px-3 py-3 text-sm leading-relaxed min-h-[120px]"
+        onKeyDown={handleKeyDown}
       />
+
+      {/* [[backlink]] autocomplete dropdown */}
+      {filtered.length > 0 && (
+        <div className="absolute left-3 right-3 bottom-full mb-1 z-50 rounded-md border border-border bg-popover shadow-lg py-1 max-h-[220px] overflow-y-auto">
+          <p className="px-3 py-1 text-[10px] uppercase tracking-wider text-muted-foreground/70">
+            Notas — <kbd className="font-mono">↑↓</kbd> navegar · <kbd className="font-mono">↵</kbd> insertar · <kbd className="font-mono">Esc</kbd> cerrar
+          </p>
+          {filtered.map((s, i) => (
+            <button
+              key={s.id}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                insertBacklink(s.title)
+              }}
+              className={cn(
+                'w-full text-left px-3 py-1.5 text-sm flex items-center justify-between gap-3 hover:bg-accent transition-colors',
+                i === activeIndex && 'bg-accent',
+              )}
+            >
+              <span className="truncate">{s.title}</span>
+              {s.hint && (
+                <span className="text-[10px] text-muted-foreground shrink-0">{s.hint}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

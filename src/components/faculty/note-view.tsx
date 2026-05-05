@@ -1,15 +1,16 @@
-import { ArrowLeft, CalendarDays, Pencil, Star, Trash2 } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Link2, Pencil, Star, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { SaveToAnkiButton } from '@/components/english/anki/save-to-anki-button'
 import { InteractiveCodeBlock } from '@/components/interactive-code-block'
 import { supabase } from '@/lib/supabase'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { listNotesReferencingTitle } from '@/lib/faculty/queries'
 import type { FacultyNote, FacultyNoteKind, FacultySubject } from '@/lib/faculty/types'
 import type { DevLabBlock } from '@/lib/devlab/types'
 
@@ -39,11 +40,58 @@ function SignedImage({ path, alt }: { path: string; alt: string }) {
   return <img src={url} alt={alt} className="rounded-lg max-w-full" />
 }
 
-function BlockRenderer({ block, noteTitle, noteId }: { block: DevLabBlock; noteTitle: string; noteId: string }) {
+function TextBlockView({
+  html,
+  onBacklinkClick,
+}: {
+  html: string
+  onBacklinkClick?: (title: string) => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const processed = html.replace(
+    /\[\[([^\]]+)\]\]/g,
+    '<a class="faculty-backlink" data-bk="$1" href="#">[[$1]]</a>',
+  )
+
+  useEffect(() => {
+    const container = ref.current
+    if (!container) return
+    const links = container.querySelectorAll<HTMLAnchorElement>('.faculty-backlink')
+    const cleanup: Array<() => void> = []
+    links.forEach((el) => {
+      const title = el.dataset.bk ?? ''
+      const fn = (e: MouseEvent) => {
+        e.preventDefault()
+        onBacklinkClick?.(title)
+      }
+      el.addEventListener('click', fn)
+      cleanup.push(() => el.removeEventListener('click', fn))
+    })
+    return () => cleanup.forEach((f) => f())
+  }, [processed, onBacklinkClick])
+
+  return (
+    <div
+      ref={ref}
+      className="tiptap-render max-w-2xl"
+      dangerouslySetInnerHTML={{ __html: processed }}
+    />
+  )
+}
+
+function BlockRenderer({
+  block,
+  noteTitle,
+  noteId,
+  onBacklinkClick,
+}: {
+  block: DevLabBlock
+  noteTitle: string
+  noteId: string
+  onBacklinkClick?: (title: string) => void
+}) {
   if (block.kind === 'text') {
-    return (
-      <div className="tiptap-render max-w-2xl" dangerouslySetInnerHTML={{ __html: block.html }} />
-    )
+    return <TextBlockView html={block.html} onBacklinkClick={onBacklinkClick} />
   }
   if (block.kind === 'code') {
     return (
@@ -85,15 +133,26 @@ function BlockRenderer({ block, noteTitle, noteId }: { block: DevLabBlock; noteT
   return null
 }
 
+type IncomingLink = { id: string; title: string; subject_id: string; kind: FacultyNoteKind }
+
 type Props = {
   note: FacultyNote
   subject: FacultySubject
   onBack: () => void
   onEdit: () => void
   onDelete: () => void
+  onBacklinkClick?: (title: string) => void
 }
 
-export function NoteView({ note, subject, onBack, onEdit, onDelete }: Props) {
+export function NoteView({ note, subject, onBack, onEdit, onDelete, onBacklinkClick }: Props) {
+  const [incomingLinks, setIncomingLinks] = useState<IncomingLink[]>([])
+
+  useEffect(() => {
+    listNotesReferencingTitle(note.title, note.id)
+      .then(setIncomingLinks)
+      .catch(() => {})
+  }, [note.id, note.title])
+
   return (
     <div className="flex flex-col min-h-full">
       {/* Sticky nav */}
@@ -197,10 +256,43 @@ export function NoteView({ note, subject, onBack, onEdit, onDelete }: Props) {
             </div>
           ) : (
             note.blocks.map((block) => (
-              <BlockRenderer key={block.id} block={block} noteTitle={note.title} noteId={note.id} />
+              <BlockRenderer
+                key={block.id}
+                block={block}
+                noteTitle={note.title}
+                noteId={note.id}
+                onBacklinkClick={onBacklinkClick}
+              />
             ))
           )}
         </section>
+
+        {/* Incoming links */}
+        {incomingLinks.length > 0 && (
+          <div className="mt-16 max-w-2xl">
+            <div className="h-px bg-border/40 mb-6" />
+            <div className="flex items-center gap-2 mb-4 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              <Link2 className="size-3.5" />
+              Referenciada por
+            </div>
+            <ul className="space-y-2">
+              {incomingLinks.map((n) => (
+                <li key={n.id}>
+                  <button
+                    type="button"
+                    onClick={() => onBacklinkClick?.(n.title)}
+                    className="group flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+                  >
+                    <span className="inline-block rounded px-1.5 py-0.5 text-[10px] font-medium bg-secondary text-secondary-foreground shrink-0">
+                      {KIND_LABEL[n.kind]}
+                    </span>
+                    <span className="truncate group-hover:underline underline-offset-2">{n.title}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </article>
     </div>
   )

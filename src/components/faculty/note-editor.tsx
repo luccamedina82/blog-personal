@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
 import { DevLabPostEditor } from '@/components/devlab-post-editor'
-import { createFacultyNote, updateFacultyNote } from '@/lib/faculty/queries'
+import { createFacultyNote, updateFacultyNote, listAllNotesSummary } from '@/lib/faculty/queries'
+import { BacklinkSuggestionsContext } from '@/lib/faculty/backlinks-context'
 import type {
   FacultyNote,
   FacultyNoteKind,
@@ -44,6 +45,20 @@ export function FacultyNoteEditor({
   onCancel,
 }: Props) {
   const isEdit = !!initial
+
+  const [suggestions, setSuggestions] = useState<Array<{ id: string; title: string; hint?: string }>>([])
+
+  useEffect(() => {
+    listAllNotesSummary()
+      .then((rows) =>
+        setSuggestions(
+          rows
+            .filter((n) => !initial || n.id !== initial.id)
+            .map((n) => ({ id: n.id, title: n.title, hint: n.kind })),
+        ),
+      )
+      .catch(() => {})
+  }, [initial?.id])
 
   const [kind, setKind] = useState<FacultyNoteKind>(initial?.kind ?? 'clase')
   const [date, setDate] = useState(initial?.date ?? '')
@@ -97,6 +112,7 @@ export function FacultyNoteEditor({
   }
 
   return (
+    <BacklinkSuggestionsContext.Provider value={suggestions}>
     <div className="flex flex-col min-h-full">
       {/* Faculty metadata bar — sits above DevLabPostEditor's sticky header */}
       <div className="px-6 lg:px-14 pt-6 pb-4 border-b border-border/40 bg-background/90 backdrop-blur flex items-center gap-4 flex-wrap sticky top-0 z-20">
@@ -207,5 +223,6 @@ export function FacultyNoteEditor({
         onCancel={onCancel}
       />
     </div>
+    </BacklinkSuggestionsContext.Provider>
   )
 }

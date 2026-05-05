@@ -109,6 +109,10 @@ function SubjectDetail() {
         onBack={() => setView({ kind: 'list' })}
         onEdit={() => setView({ kind: 'editor', editNote: note })}
         onDelete={handleDeleteFromView}
+        onBacklinkClick={(title) => {
+          const target = notes.find((n) => n.title === title)
+          if (target) setView({ kind: 'note', noteId: target.id })
+        }}
       />
     )
   }

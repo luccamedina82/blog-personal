@@ -206,3 +206,5 @@
 .tiptap-render ol { list-style: decimal; padding-left: 1.4em; }
 .tiptap-render li { line-height: 1.7; }
 .tiptap-render blockquote { border-left: 2px solid oklch(var(--primary) / 0.5); padding-left: 1em; color: oklch(0.72 0.01 240); font-style: italic; }
+.faculty-backlink { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: oklch(from var(--primary) l c h / 0.4); cursor: pointer; font-size: inherit; }
+.faculty-backlink:hover { text-decoration-color: var(--primary); }
