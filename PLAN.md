@@ -36,6 +36,21 @@ Decisión original: localStorage fases 1-6 → NestJS+Supabase fase 7. **Cambiad
 
 ---
 
+## 1.5. Sugerencias de infraestructura
+
+### Multi-user
+Schema ya soporta múltiples usuarios (`user_id` + RLS en todas las tablas). Para invitar amigos: Supabase dashboard → Authentication → Invite user. Sin cambios de código ni schema.
+
+### Límites Supabase free tier — acciones concretas
+
+1. **Anti-pausa (urgente):** el proyecto se pausa tras 7 días sin actividad. Crear cron gratuito en [cron-job.org](https://cron-job.org) que hace GET a la URL del proyecto cada 3 días.
+
+2. **Compresión de imágenes (antes de invitar usuarios):** Storage limit = 1 GB. Agregar compresión client-side antes de subir imágenes en DevLab y notas Faculty. Librería: `browser-image-compression`.
+
+3. **Monitorear Storage:** Supabase dashboard → Reports → Storage usage. Es el único límite que puede sorprender rápido con imágenes sin comprimir. DB (500 MB) con texto/JSON para 3-4 usuarios tarda años en llenarse.
+
+---
+
 ## 2. Arquitectura objetivo
 
 ```
