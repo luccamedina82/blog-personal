@@ -816,22 +816,22 @@ export type MoodLog = {
   - Temas sin unidad asignada siguen funcionando (unit_id nullable)
 
 **Migración:**
-- [ ] `supabase/migrations/0004b_faculty_topic_groups.sql`: crear `faculty_topic_groups` y `faculty_topic_units`, agregar columna `unit_id` a `faculty_topics` (nullable, FK)
+- [x] `supabase/migrations/0004b_faculty_topic_groups.sql`: crear `faculty_topic_groups` y `faculty_topic_units`, agregar columna `unit_id` a `faculty_topics` (nullable, FK) (2026-05-05)
 
 **Tipos y queries:**
-- [ ] Agregar `FacultyTopicGroup`, `FacultyTopicUnit` a `src/lib/faculty/types.ts`
-- [ ] CRUD para ambas tablas en `src/lib/faculty/queries.ts`
-- [ ] Helper `listTopicsStructured(subjectId)`: retorna grupos con sus unidades y cada unidad con sus temas (árbol anidado)
-- [ ] Actualizar `listAllTopicsProgress()` y `getDashboardStats()` para respetar la nueva estructura
+- [x] Agregar `FacultyTopicGroup`, `FacultyTopicUnit` a `src/lib/faculty/types.ts` (2026-05-05)
+- [x] CRUD para ambas tablas en `src/lib/faculty/queries.ts` (2026-05-05)
+- [x] Helper `listTopicsStructured(subjectId)`: retorna grupos con sus unidades y cada unidad con sus temas (árbol anidado) (2026-05-05)
+- [x] Actualizar `listAllTopicsProgress()` y `getDashboardStats()` — sin cambios necesarios, siguen funcionando (2026-05-05)
 
 **UI — `TopicList` refactor:**
-- [ ] Vista jerárquica colapsable: grupo (ej. "Parcial 1") > unidad (ej. "Unidad 2") > tema
-- [ ] CRUD inline para grupos: agregar/renombrar/eliminar grupo (▲▼ reorder)
-- [ ] CRUD inline para unidades dentro de cada grupo: agregar/renombrar/eliminar (▲▼ reorder)
-- [ ] Temas sin grupo/unidad van a sección "Sin clasificar"
-- [ ] Progress bar por grupo (% temas dominados en ese parcial): permite saber cuánto falta para cada parcial
-- [ ] Progress bar por unidad (% temas dominados en esa unidad)
-- [ ] Select de unidad en `NoteEditor` (reemplaza el select plano de topic por grupo > unidad > tema)
+- [x] Vista jerárquica colapsable: grupo (ej. "Parcial 1") > unidad (ej. "Unidad 2") > tema (2026-05-05)
+- [x] CRUD inline para grupos: agregar/renombrar/eliminar grupo (▲▼ reorder) (2026-05-05)
+- [x] CRUD inline para unidades dentro de cada grupo: agregar/renombrar/eliminar (▲▼ reorder) (2026-05-05)
+- [x] Temas sin grupo/unidad van a sección "Sin clasificar" (2026-05-05)
+- [x] Progress bar por grupo (% temas dominados en ese parcial) (2026-05-05)
+- [x] Progress bar por unidad (% temas dominados en esa unidad) (2026-05-05)
+- [x] Select de unidad en `NoteEditor` (optgroup por Group — Unit) (2026-05-05)
 
 **Salida:** `/faculty/$subjectId` temario tab muestra árbol Parcial > Unidad > Tema con progress bars anidados.
 

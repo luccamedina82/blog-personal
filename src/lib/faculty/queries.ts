@@ -2,6 +2,8 @@ import { supabase } from '@/lib/supabase'
 import type { DevLabBlock } from '@/lib/devlab/types'
 import type {
   FacultySubject,
+  FacultyTopicGroup,
+  FacultyTopicUnit,
   FacultyTopic,
   FacultyNote,
   FacultyDeadline,
@@ -70,10 +72,9 @@ export async function deleteFacultySubject(id: string): Promise<void> {
 
 // ── Topics ─────────────────────────────────────────────────────────────────
 
-export type TopicPayload = Pick<
-  FacultyTopic,
-  'subject_id' | 'title' | 'order_index' | 'status'
->
+export type TopicPayload = Pick<FacultyTopic, 'subject_id' | 'title' | 'order_index' | 'status'> & {
+  unit_id?: string | null
+}
 
 export async function listFacultyTopics(subjectId: string): Promise<FacultyTopic[]> {
   const { data, error } = await supabase
@@ -217,6 +218,109 @@ export async function updateFacultyDeadline(
 export async function deleteFacultyDeadline(id: string): Promise<void> {
   const { error } = await supabase.from('faculty_deadlines').delete().eq('id', id)
   if (error) throw error
+}
+
+// ── Topic Groups ───────────────────────────────────────────────────────────
+
+export type TopicGroupPayload = Pick<FacultyTopicGroup, 'subject_id' | 'title' | 'order_index'>
+
+export async function listFacultyTopicGroups(subjectId: string): Promise<FacultyTopicGroup[]> {
+  const { data, error } = await supabase
+    .from('faculty_topic_groups')
+    .select('*')
+    .eq('subject_id', subjectId)
+    .order('order_index', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+export async function createFacultyTopicGroup(payload: TopicGroupPayload): Promise<FacultyTopicGroup> {
+  const user_id = await getUid()
+  const { data, error } = await supabase
+    .from('faculty_topic_groups')
+    .insert({ ...payload, user_id })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateFacultyTopicGroup(
+  id: string,
+  payload: Partial<TopicGroupPayload>,
+): Promise<void> {
+  const { error } = await supabase.from('faculty_topic_groups').update(payload).eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteFacultyTopicGroup(id: string): Promise<void> {
+  const { error } = await supabase.from('faculty_topic_groups').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ── Topic Units ────────────────────────────────────────────────────────────
+
+export type TopicUnitPayload = Pick<FacultyTopicUnit, 'subject_id' | 'group_id' | 'title' | 'order_index'>
+
+export async function listFacultyTopicUnits(subjectId: string): Promise<FacultyTopicUnit[]> {
+  const { data, error } = await supabase
+    .from('faculty_topic_units')
+    .select('*')
+    .eq('subject_id', subjectId)
+    .order('order_index', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+export async function createFacultyTopicUnit(payload: TopicUnitPayload): Promise<FacultyTopicUnit> {
+  const user_id = await getUid()
+  const { data, error } = await supabase
+    .from('faculty_topic_units')
+    .insert({ ...payload, user_id })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateFacultyTopicUnit(
+  id: string,
+  payload: Partial<TopicUnitPayload>,
+): Promise<void> {
+  const { error } = await supabase.from('faculty_topic_units').update(payload).eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteFacultyTopicUnit(id: string): Promise<void> {
+  const { error } = await supabase.from('faculty_topic_units').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ── Structured topics helper ───────────────────────────────────────────────
+
+export type StructuredTopics = {
+  groups: Array<{
+    group: FacultyTopicGroup
+    units: Array<{ unit: FacultyTopicUnit; topics: FacultyTopic[] }>
+  }>
+  unclassified: FacultyTopic[]
+}
+
+export async function listTopicsStructured(subjectId: string): Promise<StructuredTopics> {
+  const [groups, units, topics] = await Promise.all([
+    listFacultyTopicGroups(subjectId),
+    listFacultyTopicUnits(subjectId),
+    listFacultyTopics(subjectId),
+  ])
+  return {
+    groups: groups.map((group) => ({
+      group,
+      units: units
+        .filter((u) => u.group_id === group.id)
+        .map((unit) => ({ unit, topics: topics.filter((t) => t.unit_id === unit.id) })),
+    })),
+    unclassified: topics.filter((t) => !t.unit_id),
+  }
 }
 
 // ── Topics progress (all subjects) ────────────────────────────────────────

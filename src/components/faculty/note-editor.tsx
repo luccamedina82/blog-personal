@@ -3,7 +3,14 @@ import { ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
 import { DevLabPostEditor } from '@/components/devlab-post-editor'
 import { createFacultyNote, updateFacultyNote } from '@/lib/faculty/queries'
-import type { FacultyNote, FacultyNoteKind, FacultySubject, FacultyTopic } from '@/lib/faculty/types'
+import type {
+  FacultyNote,
+  FacultyNoteKind,
+  FacultySubject,
+  FacultyTopic,
+  FacultyTopicGroup,
+  FacultyTopicUnit,
+} from '@/lib/faculty/types'
 import type { DevLabPost } from '@/lib/devlab/types'
 import type { PostDraft } from '@/components/devlab-post-editor'
 
@@ -20,12 +27,22 @@ const GRADED_KINDS: FacultyNoteKind[] = ['tp', 'parcial', 'final']
 type Props = {
   subject: FacultySubject
   topics?: FacultyTopic[]
+  groups?: FacultyTopicGroup[]
+  units?: FacultyTopicUnit[]
   initial?: FacultyNote
   onSaved: (note: FacultyNote) => void
   onCancel: () => void
 }
 
-export function FacultyNoteEditor({ subject, topics = [], initial, onSaved, onCancel }: Props) {
+export function FacultyNoteEditor({
+  subject,
+  topics = [],
+  groups = [],
+  units = [],
+  initial,
+  onSaved,
+  onCancel,
+}: Props) {
   const isEdit = !!initial
 
   const [kind, setKind] = useState<FacultyNoteKind>(initial?.kind ?? 'clase')
@@ -106,19 +123,54 @@ export function FacultyNoteEditor({ subject, topics = [], initial, onSaved, onCa
             ))}
           </select>
 
-          {/* Topic select — only when topics exist */}
+          {/* Topic select — grouped when hierarchy exists */}
           {topics.length > 0 && (
             <select
               value={topicId ?? ''}
               onChange={(e) => setTopicId(e.target.value || null)}
-              className="h-7 rounded-md border border-border/60 bg-card/40 px-2 text-xs text-foreground/80 outline-none focus:border-primary/40 transition-colors max-w-[160px]"
+              className="h-7 rounded-md border border-border/60 bg-card/40 px-2 text-xs text-foreground/80 outline-none focus:border-primary/40 transition-colors max-w-[200px]"
             >
               <option value="">Sin tema</option>
-              {topics.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.title}
-                </option>
-              ))}
+              {groups.length === 0 ? (
+                topics.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.title}
+                  </option>
+                ))
+              ) : (
+                <>
+                  {groups.map((g) =>
+                    units
+                      .filter((u) => u.group_id === g.id)
+                      .map((u) => {
+                        const uTopics = topics.filter((t) => t.unit_id === u.id)
+                        if (uTopics.length === 0) return null
+                        return (
+                          <optgroup key={u.id} label={`${g.title} — ${u.title}`}>
+                            {uTopics.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.title}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )
+                      }),
+                  )}
+                  {(() => {
+                    const unclassified = topics.filter((t) => !t.unit_id)
+                    if (unclassified.length === 0) return null
+                    return (
+                      <optgroup label="Sin clasificar">
+                        {unclassified.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.title}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )
+                  })()}
+                </>
+              )}
             </select>
           )}
 

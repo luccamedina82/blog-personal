@@ -13,9 +13,18 @@ import {
   listFacultyNotes,
   listFacultyDeadlines,
   listFacultyTopics,
+  listFacultyTopicGroups,
+  listFacultyTopicUnits,
   deleteFacultyNote,
 } from '@/lib/faculty/queries'
-import type { FacultySubject, FacultyNote, FacultyDeadline, FacultyTopic } from '@/lib/faculty/types'
+import type {
+  FacultySubject,
+  FacultyNote,
+  FacultyDeadline,
+  FacultyTopic,
+  FacultyTopicGroup,
+  FacultyTopicUnit,
+} from '@/lib/faculty/types'
 
 export const Route = createFileRoute('/faculty/$subjectId')({
   component: SubjectDetail,
@@ -32,6 +41,8 @@ function SubjectDetail() {
   const [notes, setNotes] = useState<FacultyNote[]>([])
   const [deadlines, setDeadlines] = useState<FacultyDeadline[]>([])
   const [topics, setTopics] = useState<FacultyTopic[]>([])
+  const [groups, setGroups] = useState<FacultyTopicGroup[]>([])
+  const [units, setUnits] = useState<FacultyTopicUnit[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<View>({ kind: 'list' })
   const [activeTab, setActiveTab] = useState<'notas' | 'deadlines' | 'temario'>('notas')
@@ -42,12 +53,16 @@ function SubjectDetail() {
       listFacultyNotes(subjectId),
       listFacultyDeadlines(subjectId),
       listFacultyTopics(subjectId),
+      listFacultyTopicGroups(subjectId),
+      listFacultyTopicUnits(subjectId),
     ])
-      .then(([s, n, d, t]) => {
+      .then(([s, n, d, t, g, u]) => {
         setSubject(s)
         setNotes(n)
         setDeadlines(d)
         setTopics(t)
+        setGroups(g)
+        setUnits(u)
       })
       .catch(() => toast.error('Error al cargar materia'))
       .finally(() => setLoading(false))
@@ -104,6 +119,8 @@ function SubjectDetail() {
       <FacultyNoteEditor
         subject={subject}
         topics={topics}
+        groups={groups}
+        units={units}
         initial={view.editNote}
         onSaved={(saved) => {
           setNotes((prev) => {
@@ -184,10 +201,30 @@ function SubjectDetail() {
           {activeTab === 'temario' && (
             <TopicList
               subjectId={subjectId}
+              groups={groups}
+              units={units}
               topics={topics}
-              onCreated={(t) => setTopics((prev) => [...prev, t])}
-              onUpdated={(t) => setTopics((prev) => prev.map((x) => (x.id === t.id ? t : x)))}
-              onDeleted={(id) => setTopics((prev) => prev.filter((t) => t.id !== id))}
+              onGroupCreated={(g) => setGroups((prev) => [...prev, g])}
+              onGroupUpdated={(g) => setGroups((prev) => prev.map((x) => (x.id === g.id ? g : x)))}
+              onGroupDeleted={(id) => {
+                const unitIds = new Set(units.filter((u) => u.group_id === id).map((u) => u.id))
+                setTopics((prev) =>
+                  prev.map((t) => (unitIds.has(t.unit_id ?? '') ? { ...t, unit_id: null } : t)),
+                )
+                setUnits((prev) => prev.filter((u) => u.group_id !== id))
+                setGroups((prev) => prev.filter((g) => g.id !== id))
+              }}
+              onUnitCreated={(u) => setUnits((prev) => [...prev, u])}
+              onUnitUpdated={(u) => setUnits((prev) => prev.map((x) => (x.id === u.id ? u : x)))}
+              onUnitDeleted={(id) => {
+                setTopics((prev) =>
+                  prev.map((t) => (t.unit_id === id ? { ...t, unit_id: null } : t)),
+                )
+                setUnits((prev) => prev.filter((u) => u.id !== id))
+              }}
+              onTopicCreated={(t) => setTopics((prev) => [...prev, t])}
+              onTopicUpdated={(t) => setTopics((prev) => prev.map((x) => (x.id === t.id ? t : x)))}
+              onTopicDeleted={(id) => setTopics((prev) => prev.filter((t) => t.id !== id))}
             />
           )}
         </section>

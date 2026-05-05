@@ -18,10 +18,30 @@ export type FacultySubject = {
   created_at: string
 }
 
+export type FacultyTopicGroup = {
+  id: string
+  user_id: string
+  subject_id: string
+  title: string
+  order_index: number
+  created_at: string
+}
+
+export type FacultyTopicUnit = {
+  id: string
+  user_id: string
+  subject_id: string
+  group_id: string
+  title: string
+  order_index: number
+  created_at: string
+}
+
 export type FacultyTopic = {
   id: string
   user_id: string
   subject_id: string
+  unit_id: string | null
   title: string
   order_index: number
   status: FacultyTopicStatus
