@@ -454,18 +454,28 @@ export function DevLabSection() {
   // ── Category CRUD ──────────────────────────────────────────────────────────
 
   async function handleCreateCategory(payload: Parameters<typeof createDevLabCategory>[0]) {
-    const cat = await createDevLabCategory(payload)
-    setCategories((prev) => [...prev, cat])
-    setPostCounts((prev) => ({ ...prev, [cat.id]: 0 }))
-    toast.success('Category created')
+    try {
+      const cat = await createDevLabCategory(payload)
+      setCategories((prev) => [...prev, cat])
+      setPostCounts((prev) => ({ ...prev, [cat.id]: 0 }))
+      toast.success('Category created')
+    } catch {
+      toast.error('Failed to create category')
+      throw new Error('create failed')
+    }
   }
 
   async function handleUpdateCategory(payload: Parameters<typeof updateDevLabCategory>[1]) {
     if (!editingCat) return
-    await updateDevLabCategory(editingCat.id, payload)
-    setCategories((prev) => prev.map((c) => (c.id === editingCat.id ? { ...c, ...payload } : c)))
-    setEditingCat(null)
-    toast.success('Category updated')
+    try {
+      await updateDevLabCategory(editingCat.id, payload)
+      setCategories((prev) => prev.map((c) => (c.id === editingCat.id ? { ...c, ...payload } : c)))
+      setEditingCat(null)
+      toast.success('Category updated')
+    } catch {
+      toast.error('Failed to update category')
+      throw new Error('update failed')
+    }
   }
 
   async function handleDeleteCategory(cat: DevLabCategory) {
@@ -542,18 +552,21 @@ export function DevLabSection() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
-  if (loadingCats) {
-    return (
-      <div className="flex items-center gap-2 px-6 py-16 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" />
-        Loading…
-      </div>
-    )
-  }
+  const catForView = view.kind === 'posts' || view.kind === 'post' || view.kind === 'editor'
+    ? getCat(view.categoryId)
+    : undefined
+  const postForView = view.kind === 'post' ? getPost(view.postId) : undefined
 
-  if (view.kind === 'categories') {
-    return (
-      <>
+  return (
+    <div className="min-h-screen">
+      {loadingCats && (
+        <div className="flex items-center gap-2 px-6 py-16 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Loading…
+        </div>
+      )}
+
+      {!loadingCats && view.kind === 'categories' && (
         <CategoryGrid
           categories={categories}
           postCounts={postCounts}
@@ -562,23 +575,11 @@ export function DevLabSection() {
           onDelete={handleDeleteCategory}
           onNew={() => { setEditingCat(null); setCatFormOpen(true) }}
         />
-        <CategoryForm
-          open={catFormOpen}
-          onOpenChange={(v) => { setCatFormOpen(v); if (!v) setEditingCat(null) }}
-          initial={editingCat}
-          onSubmit={editingCat ? handleUpdateCategory : handleCreateCategory}
-        />
-      </>
-    )
-  }
+      )}
 
-  if (view.kind === 'posts') {
-    const cat = getCat(view.categoryId)
-    if (!cat) return null
-    return (
-      <>
+      {!loadingCats && view.kind === 'posts' && catForView && (
         <PostList
-          category={cat}
+          category={catForView}
           posts={posts}
           loading={loadingPosts}
           onSelect={(postId) => setView({ kind: 'post', categoryId: view.categoryId, postId })}
@@ -587,44 +588,35 @@ export function DevLabSection() {
           onBack={() => setView({ kind: 'categories' })}
           onNewPost={() => setView({ kind: 'editor', categoryId: view.categoryId })}
         />
-        <CategoryForm
-          open={catFormOpen}
-          onOpenChange={(v) => { setCatFormOpen(v); if (!v) setEditingCat(null) }}
-          initial={editingCat}
-          onSubmit={editingCat ? handleUpdateCategory : handleCreateCategory}
+      )}
+
+      {!loadingCats && view.kind === 'post' && catForView && postForView && (
+        <PostView
+          category={catForView}
+          post={postForView}
+          onBack={() => setView({ kind: 'posts', categoryId: view.categoryId })}
+          onEdit={() => setView({ kind: 'editor', categoryId: view.categoryId, editPost: postForView })}
+          onDelete={() => handleDeletePost(postForView)}
         />
-      </>
-    )
-  }
+      )}
 
-  if (view.kind === 'post') {
-    const cat = getCat(view.categoryId)
-    const post = getPost(view.postId)
-    if (!cat || !post) return null
-    return (
-      <PostView
-        category={cat}
-        post={post}
-        onBack={() => setView({ kind: 'posts', categoryId: view.categoryId })}
-        onEdit={() => setView({ kind: 'editor', categoryId: view.categoryId, editPost: post })}
-        onDelete={() => handleDeletePost(post)}
+      {!loadingCats && view.kind === 'editor' && catForView && (
+        <DevLabPostEditor
+          categoryLabel={catForView.label}
+          categoryId={view.categoryId}
+          initial={view.editPost}
+          onSave={handleSavePost}
+          onCancel={() => setView({ kind: 'posts', categoryId: view.categoryId })}
+        />
+      )}
+
+      {/* Always mounted — never remounts when view changes, Dialog opens reliably */}
+      <CategoryForm
+        open={catFormOpen}
+        onOpenChange={(v) => { setCatFormOpen(v); if (!v) setEditingCat(null) }}
+        initial={editingCat}
+        onSubmit={editingCat ? handleUpdateCategory : handleCreateCategory}
       />
-    )
-  }
-
-  if (view.kind === 'editor') {
-    const cat = getCat(view.categoryId)
-    if (!cat) return null
-    return (
-      <DevLabPostEditor
-        categoryLabel={cat.label}
-        categoryId={view.categoryId}
-        initial={view.editPost}
-        onSave={handleSavePost}
-        onCancel={() => setView({ kind: 'posts', categoryId: view.categoryId })}
-      />
-    )
-  }
-
-  return null
+    </div>
+  )
 }
