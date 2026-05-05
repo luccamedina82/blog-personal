@@ -4,7 +4,7 @@ import Underline from '@tiptap/extension-underline'
 import Placeholder from '@tiptap/extension-placeholder'
 import { Bold, Italic, Underline as UnderlineIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useBacklinkSuggestions } from '@/lib/faculty/backlinks-context'
 
 interface TiptapEditorProps {
@@ -18,6 +18,8 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
   const allSuggestions = useBacklinkSuggestions()
   const [query, setQuery] = useState<string | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const filtered =
     query !== null && allSuggestions.length > 0
@@ -36,6 +38,7 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
       const start = from - match[0].length
       editor.chain().focus().deleteRange({ from: start, to: from }).insertContent(`[[${title}]]`).run()
       setQuery(null)
+      setDropdownPos(null)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
@@ -57,8 +60,22 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
       if (match) {
         setQuery(match[1])
         setActiveIndex(0)
+        // Position dropdown just below the cursor
+        if (containerRef.current) {
+          try {
+            const coords = e.view.coordsAtPos(from)
+            const rect = containerRef.current.getBoundingClientRect()
+            setDropdownPos({
+              top: coords.bottom - rect.top + 4,
+              left: Math.min(coords.left - rect.left, rect.width - 240),
+            })
+          } catch {
+            setDropdownPos(null)
+          }
+        }
       } else {
         setQuery(null)
+        setDropdownPos(null)
       }
     },
   })
@@ -76,13 +93,14 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
       insertBacklink(filtered[activeIndex].title)
     } else if (e.key === 'Escape') {
       setQuery(null)
+      setDropdownPos(null)
     }
   }
 
   if (!editor) return null
 
   return (
-    <div className={cn('flex flex-col relative', className)}>
+    <div ref={containerRef} className={cn('flex flex-col relative', className)}>
       {/* Static formatting toolbar */}
       <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-border/40 bg-background/20 flex-wrap">
         <ToolBtn active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} title="Bold (⌘B)">
@@ -126,11 +144,14 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
         onKeyDown={handleKeyDown}
       />
 
-      {/* [[backlink]] autocomplete dropdown */}
-      {filtered.length > 0 && (
-        <div className="absolute left-3 right-3 bottom-full mb-1 z-50 rounded-md border border-border bg-popover shadow-lg py-1 max-h-[220px] overflow-y-auto">
+      {/* [[backlink]] autocomplete dropdown — anchored to cursor position */}
+      {filtered.length > 0 && dropdownPos && (
+        <div
+          className="absolute z-50 rounded-md border border-border bg-popover shadow-lg py-1 w-64 max-h-[220px] overflow-y-auto"
+          style={{ top: dropdownPos.top, left: dropdownPos.left }}
+        >
           <p className="px-3 py-1 text-[10px] uppercase tracking-wider text-muted-foreground/70">
-            Notas — <kbd className="font-mono">↑↓</kbd> navegar · <kbd className="font-mono">↵</kbd> insertar · <kbd className="font-mono">Esc</kbd> cerrar
+            <kbd className="font-mono">↑↓</kbd> · <kbd className="font-mono">↵</kbd> insertar · <kbd className="font-mono">Esc</kbd>
           </p>
           {filtered.map((s, i) => (
             <button
