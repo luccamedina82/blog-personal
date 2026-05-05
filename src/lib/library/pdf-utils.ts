@@ -4,10 +4,8 @@ let initialized = false
 
 export function ensurePdfWorker() {
   if (initialized) return
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.min.mjs',
-    import.meta.url,
-  ).toString()
+  // CDN worker bypasses Vite bundling issues with pdfjs-dist pure ESM
+  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
   initialized = true
 }
 

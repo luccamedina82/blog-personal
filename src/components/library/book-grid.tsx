@@ -197,18 +197,23 @@ export function BookGrid({ books, citationCounts, onNew, onEdit, onDeleted, onOp
               </div>
 
               {/* Meta */}
-              <div className="p-2.5 flex flex-col gap-1 flex-1">
-                <p className="text-xs font-medium text-foreground line-clamp-2 leading-snug">{book.title}</p>
+              <div className="p-2.5 flex flex-col gap-1 min-h-0">
+                <p
+                  className="text-xs font-medium text-foreground leading-snug overflow-hidden"
+                  style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
+                >
+                  {book.title}
+                </p>
                 {book.author && (
                   <p className="text-[11px] text-muted-foreground truncate">{book.author}</p>
                 )}
-                <div className="flex items-center justify-between mt-auto pt-1">
-                  <div className="flex flex-wrap gap-1">
-                    {book.module_tags.map((tag) => (
+                <div className="flex items-center justify-between pt-1 gap-1">
+                  <div className="flex flex-wrap gap-1 min-w-0">
+                    {book.module_tags.slice(0, 2).map((tag) => (
                       <Badge
                         key={tag}
                         variant="outline"
-                        className={cn('text-[9px] px-1.5 py-0 h-4', MODULE_BADGE[tag])}
+                        className={cn('text-[9px] px-1.5 py-0 h-4 shrink-0', MODULE_BADGE[tag])}
                       >
                         {tag}
                       </Badge>

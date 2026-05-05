@@ -154,6 +154,7 @@ export function PdfViewer({ storagePath, initialPage = 1, onPageChange, classNam
         <Document
           file={url}
           onLoadSuccess={({ numPages: n }) => setNumPages(n)}
+          onLoadError={(err) => console.error('[PdfViewer] load error:', err)}
           loading={
             <div className="flex flex-col gap-2 w-full max-w-2xl mt-4">
               {Array.from({ length: 12 }).map((_, i) => (
