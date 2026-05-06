@@ -957,23 +957,22 @@ export type BookCitation = {
   - Loading skeleton + error state
 - [x] Integrado en `/library`: click libro → Sheet lateral con PdfViewer (2026-05-05)
 
-#### 10d — Citas de libros en notas Faculty
-- [ ] Tiptap extension custom `BookCitation` (nodo inline atómico):
-  - Atributos: `book_id`, `page`, `label` (cache de title para render sin fetch)
-  - Render: `<span class="book-citation" data-book-id data-page>📖 {label} p.{page}</span>` — clickeable
-  - Schema en `src/components/devlab/tiptap-extensions/book-citation.ts` (compartido faculty+devlab)
-- [ ] `BookCitationPicker` modal (cmdk-style): search libros → seleccionar → input "página" → insert
-- [ ] Toolbar button en `TiptapEditor` (icon `BookMarked` Lucide) → abre picker
-- [ ] Hook `useNoteCitationsSync(noteId, sourceKind)`: en `onUpdate` de tiptap, debounced 500ms, extrae todos nodos `bookCitation` del doc → `replaceCitationsForNote(...)`
-- [ ] Vista split en `NoteView` Faculty:
-  - Layout: estado `rightPanel: 'pdf' | 'note-preview' | null`
-  - Cuando activo → grid 2 columnas con splitter draggable (lib `react-resizable-panels` o custom CSS resize)
-  - Izquierda: contenido nota (read-only, `.tiptap-render`)
-  - Derecha: `<PdfViewer storagePath={book.storage_path} initialPage={citation.page} />`
-  - Click en marker `📖` dentro de la nota → set `rightPanel='pdf'`, cargar libro+página
-  - Toggle cerrar panel
-  - Si nota tiene varias citas → tabs arriba del viewer para cambiar de libro
-- [ ] Cleanup: al borrar marker en editor, sync borra row correspondiente (cubierto por replace strategy)
+#### 10d — Citas de libros en notas Faculty ✓ (2026-05-06)
+- [x] Tiptap extension custom `BookCitation` (nodo inline atómico): `src/lib/faculty/book-citation-extension.ts` (2026-05-06)
+  - Atributos: `bookId`, `bookTitle`, `storagePath`, `page`
+  - Render: `<span class="book-citation-chip" data-bc data-book-id data-book-title data-storage-path data-page>📖 {title} p.{page}</span>` — clickeable
+- [x] `BookCitationPicker` modal: `src/components/library/book-citation-picker.tsx` — search libros → seleccionar → input página → insert (2026-05-06)
+- [x] Toolbar button en `TiptapEditor` (icon `BookOpen` Lucide) → abre picker; al insertar auto-abre panel PDF (2026-05-06)
+- [x] Citation sync on save en `FacultyNoteEditor.handleSave`: escanea bloques de texto para `[data-bc]` → `replaceCitationsForNote('faculty_note', noteId, citations)` (no-blocking) (2026-05-06)
+- [x] Vista split en `NoteView` + editor Faculty vía `NoteSplitLayout` + `PdfPanelContext` (2026-05-06)
+  - `PdfPanelContext`: contexto global `openPdf(storagePath, page)` — cualquier componente lo llama
+  - `react-resizable-panels` — split horizontal, ambos paneles scrolleables independientes
+  - Panel izquierdo: nota (read-only o editor), panel derecho: `PdfViewer`
+  - PDF no se superpone — ocupa espacio propio en la grilla
+  - Click en chip `📖` en `NoteView` (read mode) → `openPdf` vía contexto
+  - Auto-abre al insertar cita desde picker en modo editor
+  - Botón X cierra panel; navegar a lista = cierra panel
+- [x] Cleanup cubierto por replace strategy (al guardar nota, todas las citas se resincronizan desde el doc)
 
 #### 10e — Citas de libros en notas DevLab
 - [ ] Reusar extension Tiptap `BookCitation` y `BookCitationPicker`
@@ -1190,8 +1189,8 @@ VITE_SUPABASE_ANON_KEY
 
 ---
 
-**Última actualización:** 2026-05-05
-**Estado:** Fases 0–7 COMPLETAS. Fase 8 (Faculty MVP) COMPLETA. Fase 9a/9a.5/9b/9c COMPLETAS. Pendiente: 9d (Export PDF apunte). Roadmap extendido 2026-05-05 con Fase 10 (Biblioteca + Book Citations + Backlinks Preview UX, renderer `react-pdf`), corriendo Personal a Fase 11 e IA a Fase 12. Decisiones 2026-05-05: PDF renderer = react-pdf wojtekmaj, citas con dual-storage (marker tiptap + row book_citations), backlinks `[[nota]]` con popover 2 opciones (ir / preview lateral), citar frase específica = tech debt. Siguiente: ejecutar 9d o saltar a Fase 10a (migración SQL library + setup ruta).
+**Última actualización:** 2026-05-06
+**Estado:** Fases 0–7 COMPLETAS. Fase 8 (Faculty MVP) COMPLETA. Fase 9a/9a.5/9b/9c COMPLETAS. Pendiente: 9d (Export PDF apunte). Fase 10a/10b/10c/10d COMPLETAS. Pendiente: 10e (citas en DevLab), 10f (backlinks preview UX), 10g (cross-link english ↔ biblioteca). Siguiente: 10e o 10f.
 
 
 
