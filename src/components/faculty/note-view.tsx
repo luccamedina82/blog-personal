@@ -1,10 +1,11 @@
-import { ArrowLeft, CalendarDays, Link2, Pencil, Star, Trash2 } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, CalendarDays, Eye, Link2, Pencil, Star, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { SaveToAnkiButton } from '@/components/english/anki/save-to-anki-button'
 import { InteractiveCodeBlock } from '@/components/interactive-code-block'
 import { supabase } from '@/lib/supabase'
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { usePdfPanel } from '@/lib/faculty/pdf-panel-context'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -41,15 +42,82 @@ function SignedImage({ path, alt }: { path: string; alt: string }) {
   return <img src={url} alt={alt} className="rounded-lg max-w-full" />
 }
 
+function BacklinkPopover({
+  title,
+  rect,
+  onNavigate,
+  onPreview,
+  onClose,
+}: {
+  title: string
+  rect: DOMRect
+  onNavigate: () => void
+  onPreview?: () => void
+  onClose: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [onClose])
+
+  return createPortal(
+    <div
+      ref={ref}
+      className="fixed z-[200] rounded-md border border-border bg-popover shadow-md py-1 min-w-[170px]"
+      style={{
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - 200)),
+        top: rect.bottom + 6,
+      }}
+    >
+      <p className="px-2.5 py-1 text-[10px] text-muted-foreground font-mono truncate">[[{title}]]</p>
+      <div className="h-px bg-border/40 my-0.5" />
+      <button
+        type="button"
+        onClick={onNavigate}
+        className="w-full flex items-center gap-2 px-2.5 py-1.5 text-sm text-left hover:bg-accent transition-colors"
+      >
+        <ArrowUpRight className="size-3.5 text-muted-foreground shrink-0" />
+        Ir a la nota
+      </button>
+      {onPreview && (
+        <button
+          type="button"
+          onClick={onPreview}
+          className="w-full flex items-center gap-2 px-2.5 py-1.5 text-sm text-left hover:bg-accent transition-colors"
+        >
+          <Eye className="size-3.5 text-muted-foreground shrink-0" />
+          Preview lateral
+        </button>
+      )}
+    </div>,
+    document.body,
+  )
+}
+
 function TextBlockView({
   html,
   onBacklinkClick,
+  onBacklinkPreview,
 }: {
   html: string
   onBacklinkClick?: (title: string) => void
+  onBacklinkPreview?: (title: string) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const { openPdf } = usePdfPanel()
+  const [activeBacklink, setActiveBacklink] = useState<{ title: string; rect: DOMRect } | null>(null)
   const processed = html.replace(
     /\[\[([^\]]+)\]\]/g,
     '<a class="faculty-backlink" data-bk="$1" href="#">[[$1]]</a>',
@@ -64,7 +132,7 @@ function TextBlockView({
       const title = el.dataset.bk ?? ''
       const fn = (e: MouseEvent) => {
         e.preventDefault()
-        onBacklinkClick?.(title)
+        setActiveBacklink({ title, rect: el.getBoundingClientRect() })
       }
       el.addEventListener('click', fn)
       cleanup.push(() => el.removeEventListener('click', fn))
@@ -82,14 +150,25 @@ function TextBlockView({
     })
 
     return () => cleanup.forEach((f) => f())
-  }, [processed, onBacklinkClick, openPdf])
+  }, [processed, openPdf])
 
   return (
-    <div
-      ref={ref}
-      className="tiptap-render max-w-2xl"
-      dangerouslySetInnerHTML={{ __html: processed }}
-    />
+    <>
+      <div
+        ref={ref}
+        className="tiptap-render max-w-2xl"
+        dangerouslySetInnerHTML={{ __html: processed }}
+      />
+      {activeBacklink && (
+        <BacklinkPopover
+          title={activeBacklink.title}
+          rect={activeBacklink.rect}
+          onNavigate={() => { onBacklinkClick?.(activeBacklink.title); setActiveBacklink(null) }}
+          onPreview={onBacklinkPreview ? () => { onBacklinkPreview(activeBacklink.title); setActiveBacklink(null) } : undefined}
+          onClose={() => setActiveBacklink(null)}
+        />
+      )}
+    </>
   )
 }
 
@@ -98,14 +177,16 @@ function BlockRenderer({
   noteTitle,
   noteId,
   onBacklinkClick,
+  onBacklinkPreview,
 }: {
   block: DevLabBlock
   noteTitle: string
   noteId: string
   onBacklinkClick?: (title: string) => void
+  onBacklinkPreview?: (title: string) => void
 }) {
   if (block.kind === 'text') {
-    return <TextBlockView html={block.html} onBacklinkClick={onBacklinkClick} />
+    return <TextBlockView html={block.html} onBacklinkClick={onBacklinkClick} onBacklinkPreview={onBacklinkPreview} />
   }
   if (block.kind === 'code') {
     return (
@@ -156,9 +237,10 @@ type Props = {
   onEdit: () => void
   onDelete: () => void
   onBacklinkClick?: (title: string) => void
+  onBacklinkPreview?: (title: string) => void
 }
 
-export function NoteView({ note, subject, onBack, onEdit, onDelete, onBacklinkClick }: Props) {
+export function NoteView({ note, subject, onBack, onEdit, onDelete, onBacklinkClick, onBacklinkPreview }: Props) {
   const [incomingLinks, setIncomingLinks] = useState<IncomingLink[]>([])
 
   useEffect(() => {
@@ -276,6 +358,7 @@ export function NoteView({ note, subject, onBack, onEdit, onDelete, onBacklinkCl
                 noteTitle={note.title}
                 noteId={note.id}
                 onBacklinkClick={onBacklinkClick}
+                onBacklinkPreview={onBacklinkPreview}
               />
             ))
           )}
@@ -308,6 +391,95 @@ export function NoteView({ note, subject, onBack, onEdit, onDelete, onBacklinkCl
           </div>
         )}
       </article>
+    </div>
+  )
+}
+
+// ── Note preview panel (right-slot read-only view) ────────────────────────────
+
+export function NotePreviewPanel({
+  note,
+  onBacklinkClick,
+  onBacklinkPreview,
+}: {
+  note: FacultyNote
+  onBacklinkClick?: (title: string) => void
+  onBacklinkPreview?: (title: string) => void
+}) {
+  const [incomingLinks, setIncomingLinks] = useState<IncomingLink[]>([])
+
+  useEffect(() => {
+    listNotesReferencingTitle(note.title, note.id).then(setIncomingLinks).catch(() => {})
+  }, [note.id, note.title])
+
+  return (
+    <div className="flex-1 overflow-y-auto min-h-0">
+      {/* Mini metadata bar */}
+      <div className="px-4 py-2.5 border-b border-border/30 flex items-center gap-2 flex-wrap">
+        <Badge
+          variant="outline"
+          className={cn('text-[9px] uppercase tracking-wide shrink-0', KIND_BADGE[note.kind])}
+        >
+          {KIND_LABEL[note.kind]}
+        </Badge>
+        {note.date && (
+          <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+            <CalendarDays className="size-2.5" />
+            {new Date(note.date + 'T00:00:00').toLocaleDateString('es-AR', {
+              day: 'numeric', month: 'short', year: 'numeric',
+            })}
+          </span>
+        )}
+        {note.tags.length > 0 && (
+          <span className="text-[10px] text-muted-foreground font-mono">
+            #{note.tags[0]}{note.tags.length > 1 ? ` +${note.tags.length - 1}` : ''}
+          </span>
+        )}
+      </div>
+
+      {/* Blocks */}
+      <div className="px-4 py-4 space-y-6">
+        {note.blocks.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Sin contenido todavía.</p>
+        ) : (
+          note.blocks.map((block) => (
+            <BlockRenderer
+              key={block.id}
+              block={block}
+              noteTitle={note.title}
+              noteId={note.id}
+              onBacklinkClick={onBacklinkClick}
+              onBacklinkPreview={onBacklinkPreview}
+            />
+          ))
+        )}
+
+        {/* Incoming links (level 1 only) */}
+        {incomingLinks.length > 0 && (
+          <div className="pt-4 border-t border-border/40">
+            <div className="flex items-center gap-1.5 mb-2.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              <Link2 className="size-3" />
+              Referenciada por ({incomingLinks.length})
+            </div>
+            <ul className="space-y-1.5">
+              {incomingLinks.map((n) => (
+                <li key={n.id}>
+                  <button
+                    type="button"
+                    onClick={() => onBacklinkClick?.(n.title)}
+                    className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+                  >
+                    <span className="inline-block rounded px-1.5 py-0.5 text-[9px] font-medium bg-secondary text-secondary-foreground shrink-0">
+                      {KIND_LABEL[n.kind]}
+                    </span>
+                    <span className="truncate hover:underline underline-offset-2">{n.title}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

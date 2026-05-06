@@ -980,17 +980,17 @@ export type BookCitation = {
 - [x] `source_kind='devlab_post'` en sync hook — `syncCitations` en `DevLabSection.handleSavePost`
 - [x] Vista split en `PostView` DevLab — `PostSplitLayout` en `devlab-section.tsx`, mismo patrón que faculty
 
-#### 10f — Backlinks preview UX (refactor de Fase 9c)
-- [ ] Modificar renderer de `[[nota]]` en `NoteView` (faculty + devlab si aplica): click no redirige inmediato
-- [ ] Popover (Radix `Popover`) con 2 botones:
-  - **"Ir a la nota"** → navega a la ruta destino (comportamiento actual)
-  - **"Preview lateral"** → setea `rightPanel='note-preview'` con id de nota destino
-- [ ] `NotePreviewPanel` componente:
-  - Header: título nota + materia/categoría + botón "abrir completa" → navega
-  - Body: render `.tiptap-render` read-only del contenido
-  - Indica si la nota tiene sus propios backlinks (no recursivo — solo nivel 1)
-- [ ] Single slot lateral: si ya hay PDF abierto y abrís preview → reemplaza contenido (no stackea)
-- [ ] Mismo `SplitView` component reutilizado (panel right intercambiable)
+#### 10f — Backlinks preview UX (refactor de Fase 9c) ✓ (2026-05-06)
+- [x] Modificar renderer de `[[nota]]` en `NoteView` (faculty): click no redirige inmediato (2026-05-06)
+- [x] `BacklinkPopover` portal-based con 2 botones (2026-05-06):
+  - **"Ir a la nota"** → navega a la ruta destino (comportamiento anterior)
+  - **"Preview lateral"** → abre `NotePreviewPanel` en panel derecho
+- [x] `NotePreviewPanel` componente exportado desde `note-view.tsx` (2026-05-06):
+  - Header mini: kind badge + fecha + tags (en panel right header: título + ExternalLink button)
+  - Body: render blocks read-only con `BlockRenderer` (incluye backlinks funcionales)
+  - Incoming links nivel 1 (`listNotesReferencingTitle`)
+- [x] Single slot lateral: `RightPanel` union type — PDF o note-preview, nunca stackeados (2026-05-06)
+- [x] `NoteSplitLayout` generalizado: header y body cambian según `rightPanel.kind` (2026-05-06)
 
 #### 10g — Cross-link english "books" ↔ biblioteca
 - [ ] En `BookForm` (english `/english/books`): campo opcional `library_book_id` (nullable FK)
@@ -1190,7 +1190,7 @@ VITE_SUPABASE_ANON_KEY
 ---
 
 **Última actualización:** 2026-05-06
-**Estado:** Fases 0–7 COMPLETAS. Fase 8 (Faculty MVP) COMPLETA. Fase 9a/9a.5/9b/9c COMPLETAS. Pendiente: 9d (Export PDF apunte). Fase 10a/10b/10c/10d/10e COMPLETAS. Pendiente: 10f (backlinks preview UX), 10g (cross-link english ↔ biblioteca). Siguiente: 10f o 10g.
+**Estado:** Fases 0–7 COMPLETAS. Fase 8 (Faculty MVP) COMPLETA. Fase 9a/9a.5/9b/9c COMPLETAS. Pendiente: 9d (Export PDF apunte). Fase 10a/10b/10c/10d/10e/10f COMPLETAS. Pendiente: 10g (cross-link english ↔ biblioteca). Siguiente: 10g o Fase 11 (Personal).
 
 
 

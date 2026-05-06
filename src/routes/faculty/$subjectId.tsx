@@ -2,12 +2,12 @@ import { createFileRoute } from '@tanstack/react-router'
 import React, { useEffect, useState, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { Bookmark, X } from 'lucide-react'
+import { Bookmark, ExternalLink, X } from 'lucide-react'
 import { PdfViewer } from '@/components/library/pdf-viewer'
 import { PdfPanelContext } from '@/lib/faculty/pdf-panel-context'
 import { FacultyShell } from '@/components/faculty/faculty-shell'
 import { NotesList } from '@/components/faculty/notes-list'
-import { NoteView } from '@/components/faculty/note-view'
+import { NoteView, NotePreviewPanel } from '@/components/faculty/note-view'
 import { FacultyNoteEditor } from '@/components/faculty/note-editor'
 import { DeadlineList } from '@/components/faculty/deadline-list'
 import { TopicList } from '@/components/faculty/topic-list'
@@ -46,6 +46,10 @@ type CitationCtx = {
   insertFn: (page: number) => void
 }
 
+type RightPanel =
+  | { kind: 'pdf'; storagePath: string; page: number }
+  | { kind: 'note-preview'; note: FacultyNote }
+
 function SubjectDetail() {
   const { subjectId } = Route.useParams()
   const [subject, setSubject] = useState<FacultySubject | null>(null)
@@ -57,27 +61,28 @@ function SubjectDetail() {
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<View>({ kind: 'list' })
   const [activeTab, setActiveTab] = useState<'notas' | 'deadlines' | 'temario' | 'calificaciones'>('notas')
-  const [pdfPanel, setPdfPanel] = useState<{ storagePath: string; page: number } | null>(null)
+  const [rightPanel, setRightPanel] = useState<RightPanel | null>(null)
   const [citationCtx, setCitationCtx] = useState<CitationCtx | null>(null)
   const insertFnRef = useRef<((page: number) => void) | null>(null)
 
   const pdfCtxValue = useMemo(
     () => ({
-      openPdf: (storagePath: string, page = 1) => setPdfPanel({ storagePath, page }),
+      openPdf: (storagePath: string, page = 1) =>
+        setRightPanel({ kind: 'pdf', storagePath, page }),
       startCitationBrowse: (
         book: { id: string; title: string; storage_path: string },
         insertFn: (page: number) => void,
       ) => {
         insertFnRef.current = insertFn
         setCitationCtx({ bookId: book.id, bookTitle: book.title, storagePath: book.storage_path, insertFn })
-        setPdfPanel({ storagePath: book.storage_path, page: 1 })
+        setRightPanel({ kind: 'pdf', storagePath: book.storage_path, page: 1 })
       },
     }),
     [],
   )
 
-  function closePdfAndCitation() {
-    setPdfPanel(null)
+  function closeRightPanel() {
+    setRightPanel(null)
     setCitationCtx(null)
     insertFnRef.current = null
   }
@@ -85,6 +90,28 @@ function SubjectDetail() {
   function handleCiteAtPage(page: number) {
     citationCtx?.insertFn(page)
     toast.success(`Cita insertada — pág. ${page}`)
+  }
+
+  function handleBacklinkNavigate(title: string) {
+    const target = notes.find((n) => n.title === title)
+    if (!target) return
+    setView({ kind: 'note', noteId: target.id })
+    // Close note-preview if open (avoid duplicate display), keep PDF open
+    setRightPanel((prev) => (prev?.kind === 'note-preview' ? null : prev))
+  }
+
+  function handleBacklinkPreview(title: string) {
+    const target = notes.find((n) => n.title === title)
+    if (!target) return
+    // Opening preview exits any active citation-browse flow
+    setCitationCtx(null)
+    insertFnRef.current = null
+    setRightPanel({ kind: 'note-preview', note: target })
+  }
+
+  function handleOpenFullNote(note: FacultyNote) {
+    setView({ kind: 'note', noteId: note.id })
+    setRightPanel(null)
   }
 
   useEffect(() => {
@@ -139,7 +166,7 @@ function SubjectDetail() {
         await deleteFacultyNote(note!.id)
         setNotes((prev) => prev.filter((n) => n.id !== note!.id))
         setView({ kind: 'list' })
-        closePdfAndCitation()
+        closeRightPanel()
         toast.success(`"${note!.title}" eliminada`)
       } catch {
         toast.error('Error al eliminar')
@@ -149,21 +176,22 @@ function SubjectDetail() {
     return (
       <PdfPanelContext.Provider value={pdfCtxValue}>
         <NoteSplitLayout
-          pdfPanel={pdfPanel}
-          onClosePdf={closePdfAndCitation}
+          rightPanel={rightPanel}
+          onClosePanel={closeRightPanel}
           citationCtx={citationCtx}
           onCiteAtPage={handleCiteAtPage}
+          onOpenFullNote={handleOpenFullNote}
+          onNoteBacklinkClick={handleBacklinkNavigate}
+          onNoteBacklinkPreview={handleBacklinkPreview}
         >
           <NoteView
             note={note}
             subject={subject}
-            onBack={() => { setView({ kind: 'list' }); closePdfAndCitation() }}
+            onBack={() => { setView({ kind: 'list' }); closeRightPanel() }}
             onEdit={() => setView({ kind: 'editor', editNote: note })}
             onDelete={handleDeleteFromView}
-            onBacklinkClick={(title) => {
-              const target = notes.find((n) => n.title === title)
-              if (target) setView({ kind: 'note', noteId: target.id })
-            }}
+            onBacklinkClick={handleBacklinkNavigate}
+            onBacklinkPreview={handleBacklinkPreview}
           />
         </NoteSplitLayout>
       </PdfPanelContext.Provider>
@@ -176,10 +204,13 @@ function SubjectDetail() {
     return (
       <PdfPanelContext.Provider value={pdfCtxValue}>
         <NoteSplitLayout
-          pdfPanel={pdfPanel}
-          onClosePdf={closePdfAndCitation}
+          rightPanel={rightPanel}
+          onClosePanel={closeRightPanel}
           citationCtx={citationCtx}
           onCiteAtPage={handleCiteAtPage}
+          onOpenFullNote={handleOpenFullNote}
+          onNoteBacklinkClick={handleBacklinkNavigate}
+          onNoteBacklinkPreview={handleBacklinkPreview}
         >
           <FacultyNoteEditor
             subject={subject}
@@ -194,9 +225,9 @@ function SubjectDetail() {
                 return [saved, ...prev]
               })
               setView({ kind: 'list' })
-              closePdfAndCitation()
+              closeRightPanel()
             }}
-            onCancel={() => { setView({ kind: 'list' }); closePdfAndCitation() }}
+            onCancel={() => { setView({ kind: 'list' }); closeRightPanel() }}
           />
         </NoteSplitLayout>
       </PdfPanelContext.Provider>
@@ -326,22 +357,29 @@ function SubjectDetail() {
 
 // ── Split layout helper ───────────────────────────────────────────────────────
 // Left panel always in same tree position → editor/noteview never remounts when
-// PDF opens or closes, preserving unsaved state.
+// right panel opens or closes, preserving unsaved state.
 
 function NoteSplitLayout({
   children,
-  pdfPanel,
-  onClosePdf,
+  rightPanel,
+  onClosePanel,
   citationCtx,
   onCiteAtPage,
+  onOpenFullNote,
+  onNoteBacklinkClick,
+  onNoteBacklinkPreview,
 }: {
   children: React.ReactNode
-  pdfPanel: { storagePath: string; page: number } | null
-  onClosePdf: () => void
+  rightPanel: RightPanel | null
+  onClosePanel: () => void
   citationCtx: CitationCtx | null
   onCiteAtPage: (page: number) => void
+  onOpenFullNote?: (note: FacultyNote) => void
+  onNoteBacklinkClick?: (title: string) => void
+  onNoteBacklinkPreview?: (title: string) => void
 }) {
   const [currentPdfPage, setCurrentPdfPage] = useState(1)
+  const pdfPanel = rightPanel?.kind === 'pdf' ? rightPanel : null
 
   useEffect(() => {
     if (pdfPanel) setCurrentPdfPage(pdfPanel.page)
@@ -349,46 +387,85 @@ function NoteSplitLayout({
 
   return (
     <div className="flex overflow-hidden" style={{ height: '100dvh' }}>
-      {/* Left — stable, never remounts regardless of PDF state */}
+      {/* Left — stable, never remounts regardless of right panel state */}
       <div
         className="h-full overflow-y-auto shrink-0"
-        style={{ width: pdfPanel ? '55%' : '100%' }}
+        style={{ width: rightPanel ? '55%' : '100%' }}
       >
         {children}
       </div>
       {/* Right — appears/disappears without touching the left tree */}
-      {pdfPanel && (
+      {rightPanel && (
         <div className="flex-1 h-full flex flex-col border-l border-border/60 min-w-0">
+          {/* Panel header */}
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/60 bg-background/80 shrink-0 gap-2">
-            <span className="text-[11px] text-muted-foreground font-medium">PDF</span>
-            <div className="flex items-center gap-2 ml-auto">
-              {citationCtx && (
-                <button
-                  type="button"
-                  onClick={() => onCiteAtPage(currentPdfPage)}
-                  className="flex items-center gap-1 h-6 px-2 rounded text-[11px] bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-medium"
-                  title="Insertar cita en la nota"
-                >
-                  <Bookmark className="size-3" />
-                  Citar pág. {currentPdfPage}
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={onClosePdf}
-                className="flex items-center justify-center size-5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-                title="Cerrar PDF"
-              >
-                <X className="size-3.5" />
-              </button>
-            </div>
+            {rightPanel.kind === 'pdf' ? (
+              <>
+                <span className="text-[11px] text-muted-foreground font-medium">PDF</span>
+                <div className="flex items-center gap-2 ml-auto">
+                  {citationCtx && (
+                    <button
+                      type="button"
+                      onClick={() => onCiteAtPage(currentPdfPage)}
+                      className="flex items-center gap-1 h-6 px-2 rounded text-[11px] bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-medium"
+                      title="Insertar cita en la nota"
+                    >
+                      <Bookmark className="size-3" />
+                      Citar pág. {currentPdfPage}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={onClosePanel}
+                    className="flex items-center justify-center size-5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                    title="Cerrar panel"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <span className="text-[11px] font-medium truncate max-w-[160px]">
+                  {rightPanel.note.title}
+                </span>
+                <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => onOpenFullNote?.(rightPanel.note)}
+                    className="flex items-center justify-center size-5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                    title="Abrir nota completa"
+                  >
+                    <ExternalLink className="size-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onClosePanel}
+                    className="flex items-center justify-center size-5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                    title="Cerrar panel"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              </>
+            )}
           </div>
-          <PdfViewer
-            storagePath={pdfPanel.storagePath}
-            initialPage={pdfPanel.page}
-            onPageChange={setCurrentPdfPage}
-            className="flex-1 min-h-0"
-          />
+
+          {/* Panel body */}
+          {rightPanel.kind === 'pdf' ? (
+            <PdfViewer
+              storagePath={rightPanel.storagePath}
+              initialPage={rightPanel.page}
+              onPageChange={setCurrentPdfPage}
+              className="flex-1 min-h-0"
+            />
+          ) : (
+            <NotePreviewPanel
+              note={rightPanel.note}
+              onBacklinkClick={onNoteBacklinkClick}
+              onBacklinkPreview={onNoteBacklinkPreview}
+            />
+          )}
         </div>
       )}
     </div>
