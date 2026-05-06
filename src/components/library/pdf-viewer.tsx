@@ -35,13 +35,13 @@ export function PdfViewer({ storagePath, initialPage = 1, onPageChange, classNam
   const [containerWidth, setContainerWidth] = useState(0)
   // Pages that should render their <Page> (near viewport)
   const [renderedPages, setRenderedPages] = useState<Set<number>>(new Set())
+  const [ratiosReady, setRatiosReady] = useState(false)
 
   const containerRef = useRef<HTMLDivElement>(null)
-  // aspect ratio (height/width) per page — fetched from pdf metadata, no render needed
   const aspectRatios = useRef<Map<number, number>>(new Map())
   const pageWrapperRefs = useRef<Map<number, HTMLDivElement>>(new Map())
   const renderObserver = useRef<IntersectionObserver | null>(null)
-  const trackObserver = useRef<IntersectionObserver | null>(null)
+  const scrollRafRef = useRef<number | null>(null)
 
   useEffect(() => {
     setUrl(null)
@@ -49,6 +49,7 @@ export function PdfViewer({ storagePath, initialPage = 1, onPageChange, classNam
     setNumPages(0)
     setRenderedPages(new Set())
     aspectRatios.current.clear()
+    setRatiosReady(false)
     setCurrentPage(initialPage)
     setPageInput(String(initialPage))
     getSignedUrl(storagePath).then(setUrl).catch(() => setUrlError(true))
@@ -59,11 +60,10 @@ export function PdfViewer({ storagePath, initialPage = 1, onPageChange, classNam
     onPageChange?.(currentPage)
   }, [currentPage])
 
-  // Setup both observers when pages are known
+  // Setup render observer (pre-loads pages near viewport)
   useEffect(() => {
     if (!numPages || !containerRef.current) return
 
-    // Observer 1: render trigger (large margin = pre-load before visible)
     renderObserver.current?.disconnect()
     renderObserver.current = new IntersectionObserver(
       (entries) => {
@@ -82,33 +82,42 @@ export function PdfViewer({ storagePath, initialPage = 1, onPageChange, classNam
       { root: containerRef.current, rootMargin: RENDER_MARGIN, threshold: 0 },
     )
 
-    // Observer 2: current page tracker (viewport only)
-    trackObserver.current?.disconnect()
-    trackObserver.current = new IntersectionObserver(
-      (entries) => {
-        let best: number | null = null
-        let bestRatio = 0
-        for (const e of entries) {
-          if (e.isIntersecting && e.intersectionRatio > bestRatio) {
-            bestRatio = e.intersectionRatio
-            best = Number(e.target.getAttribute('data-page'))
-          }
-        }
-        if (best !== null) setCurrentPage(best)
-      },
-      { root: containerRef.current, rootMargin: '0px', threshold: [0, 0.25, 0.5, 0.75, 1] },
-    )
-
     pageWrapperRefs.current.forEach((el) => {
       renderObserver.current!.observe(el)
-      trackObserver.current!.observe(el)
     })
 
     return () => {
       renderObserver.current?.disconnect()
-      trackObserver.current?.disconnect()
     }
   }, [numPages])
+
+  function computeCurrentPage() {
+    const container = containerRef.current
+    if (!container || !pageWrapperRefs.current.size) return
+    const readingLine = container.scrollTop + container.clientHeight * 0.4
+
+    let best = 1
+    let bestDist = Infinity
+    for (const [n, el] of pageWrapperRefs.current) {
+      const top = el.offsetTop
+      const bottom = top + el.offsetHeight
+      if (top <= readingLine && bottom > readingLine) {
+        setCurrentPage(n)
+        return
+      }
+      const dist = Math.min(Math.abs(top - readingLine), Math.abs(bottom - readingLine))
+      if (dist < bestDist) {
+        bestDist = dist
+        best = n
+      }
+    }
+    setCurrentPage(best)
+  }
+
+  function onContainerScroll() {
+    if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current)
+    scrollRafRef.current = requestAnimationFrame(computeCurrentPage)
+  }
 
   const containerMeasureRef = useCallback((node: HTMLDivElement | null) => {
     if (!node) return
@@ -118,7 +127,6 @@ export function PdfViewer({ storagePath, initialPage = 1, onPageChange, classNam
 
   async function onDocumentLoad(pdf: PdfDoc) {
     setNumPages(pdf.numPages)
-    // Pre-fetch page aspect ratios (just PDF metadata — fast, no rendering)
     const pages = await Promise.all(
       Array.from({ length: pdf.numPages }, (_, i) => pdf.getPage(i + 1)),
     )
@@ -126,8 +134,14 @@ export function PdfViewer({ storagePath, initialPage = 1, onPageChange, classNam
       const vp = p.getViewport({ scale: 1 })
       aspectRatios.current.set(p.pageNumber, vp.height / vp.width)
     }
-    if (initialPage > 1) requestAnimationFrame(() => scrollToPage(initialPage))
+    setRatiosReady(true)
   }
+
+  useEffect(() => {
+    if (ratiosReady && initialPage > 1) {
+      requestAnimationFrame(() => scrollToPage(initialPage))
+    }
+  }, [ratiosReady])
 
   function scrollToPage(n: number) {
     pageWrapperRefs.current.get(n)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -228,6 +242,7 @@ export function PdfViewer({ storagePath, initialPage = 1, onPageChange, classNam
           containerMeasureRef(node)
         }}
         className="flex-1 overflow-auto bg-muted/30"
+        onScroll={onContainerScroll}
       >
         <Document
           file={url}
@@ -250,7 +265,6 @@ export function PdfViewer({ storagePath, initialPage = 1, onPageChange, classNam
                 if (el) {
                   pageWrapperRefs.current.set(n, el)
                   renderObserver.current?.observe(el)
-                  trackObserver.current?.observe(el)
                 } else {
                   pageWrapperRefs.current.delete(n)
                 }
