@@ -9,7 +9,7 @@ import { SubjectForm } from '@/components/faculty/subject-form'
 import { CountdownBadge } from '@/components/faculty/countdown-badge'
 import { listFacultySubjects, listUpcomingDeadlines, listUpcomingExams, getDashboardStats, listAllTopicsProgress } from '@/lib/faculty/queries'
 import type { DashboardStats, TopicProgress } from '@/lib/faculty/queries'
-import type { FacultySubject, FacultyDeadline, FacultyDeadlineKind } from '@/lib/faculty/types'
+import type { FacultySubject, FacultyDeadline } from '@/lib/faculty/types'
 
 export const Route = createFileRoute('/faculty/')({
   component: FacultyDashboard,
