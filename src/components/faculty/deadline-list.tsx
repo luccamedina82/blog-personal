@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Plus, Pencil, Trash2, CheckSquare, Square } from 'lucide-react'
+import { useState, useRef, useCallback } from 'react'
+import { Plus, Pencil, Trash2, CheckSquare, Square, FileText, Star } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -11,7 +11,9 @@ import {
 } from '@/components/ui/alert-dialog'
 import { CountdownBadge } from './countdown-badge'
 import { DeadlineForm } from './deadline-form'
-import { updateFacultyDeadline, deleteFacultyDeadline } from '@/lib/faculty/queries'
+import {
+  updateFacultyDeadline, deleteFacultyDeadline, setDeadlineGrade,
+} from '@/lib/faculty/queries'
 import type { FacultyDeadline, FacultyDeadlineKind } from '@/lib/faculty/types'
 
 const KIND_LABEL: Record<FacultyDeadlineKind, string> = {
@@ -65,18 +67,77 @@ function groupDeadlines(deadlines: FacultyDeadline[]): Group[] {
   return groups
 }
 
+function gradeColor(g: number) {
+  if (g >= 7) return 'text-green-500'
+  if (g >= 4) return 'text-yellow-500'
+  return 'text-red-500'
+}
+
 type Props = {
   deadlines: FacultyDeadline[]
   subjectId: string
   onCreated: (d: FacultyDeadline) => void
   onUpdated: (d: FacultyDeadline) => void
   onDeleted: (id: string) => void
+  onViewNote?: (noteId: string) => void
+  onCreateNote?: (d: FacultyDeadline) => Promise<void>
 }
 
-export function DeadlineList({ deadlines, subjectId, onCreated, onUpdated, onDeleted }: Props) {
+function GradeInput({ deadline, onUpdated }: { deadline: FacultyDeadline; onUpdated: (d: FacultyDeadline) => void }) {
+  const [value, setValue] = useState(deadline.grade != null ? String(deadline.grade) : '')
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const save = useCallback(
+    (v: string) => {
+      const parsed = v === '' ? null : parseFloat(v)
+      if (parsed === deadline.grade) return
+      setDeadlineGrade(deadline.id, parsed)
+        .then(() => onUpdated({ ...deadline, grade: parsed }))
+        .catch(() => toast.error('Error al guardar nota'))
+    },
+    [deadline, onUpdated],
+  )
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const v = e.target.value
+    setValue(v)
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => save(v), 700)
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 mt-1.5">
+      <Star className="size-3 text-yellow-500 shrink-0" />
+      <input
+        type="number"
+        step="0.25"
+        min={0}
+        max={10}
+        value={value}
+        onChange={handleChange}
+        placeholder="Nota (0–10)"
+        className={cn(
+          'h-6 w-28 rounded border border-border/60 bg-card/40 px-2 text-xs outline-none focus:border-primary/40 transition-colors',
+          deadline.grade != null && gradeColor(deadline.grade),
+        )}
+      />
+    </div>
+  )
+}
+
+export function DeadlineList({
+  deadlines,
+  subjectId,
+  onCreated,
+  onUpdated,
+  onDeleted,
+  onViewNote,
+  onCreateNote,
+}: Props) {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<FacultyDeadline | null>(null)
   const [toggling, setToggling] = useState<string | null>(null)
+  const [creatingNote, setCreatingNote] = useState<string | null>(null)
 
   const groups = groupDeadlines(deadlines)
 
@@ -104,6 +165,17 @@ export function DeadlineList({ deadlines, subjectId, onCreated, onUpdated, onDel
       toast.error('Error al eliminar')
     }
   }
+
+  async function handleCreateNote(d: FacultyDeadline) {
+    setCreatingNote(d.id)
+    try {
+      await onCreateNote?.(d)
+    } finally {
+      setCreatingNote(null)
+    }
+  }
+
+  const isPastDue = (d: FacultyDeadline) => new Date(d.due_at) < new Date()
 
   return (
     <div className="space-y-5">
@@ -140,7 +212,7 @@ export function DeadlineList({ deadlines, subjectId, onCreated, onUpdated, onDel
                     key={d.id}
                     className={cn(
                       'group flex items-start gap-3 rounded-md border border-border/70 bg-card/40 p-3 transition-all',
-                      d.done && 'opacity-60',
+                      d.done && 'opacity-70',
                     )}
                   >
                     {/* Toggle done */}
@@ -185,6 +257,33 @@ export function DeadlineList({ deadlines, subjectId, onCreated, onUpdated, onDel
                           {d.note}
                         </p>
                       )}
+
+                      {/* Grade — si done o si ya venció */}
+                      {(d.done || isPastDue(d)) && (
+                        <GradeInput deadline={d} onUpdated={onUpdated} />
+                      )}
+
+                      {/* Nota vinculada */}
+                      {d.note_id ? (
+                        <button
+                          type="button"
+                          onClick={() => onViewNote?.(d.note_id!)}
+                          className="mt-2 flex items-center gap-1.5 h-6 px-2 rounded text-[11px] text-primary/80 hover:text-primary bg-primary/5 hover:bg-primary/10 border border-primary/20 transition-colors"
+                        >
+                          <FileText className="size-3" />
+                          Ver apuntes
+                        </button>
+                      ) : onCreateNote ? (
+                        <button
+                          type="button"
+                          onClick={() => handleCreateNote(d)}
+                          disabled={creatingNote === d.id}
+                          className="mt-2 flex items-center gap-1.5 h-6 px-2 rounded text-[11px] text-muted-foreground hover:text-foreground bg-secondary/50 hover:bg-secondary border border-border/60 transition-colors disabled:opacity-50"
+                        >
+                          <FileText className="size-3" />
+                          {creatingNote === d.id ? 'Creando…' : 'Cargar apuntes'}
+                        </button>
+                      ) : null}
                     </div>
 
                     {/* Edit / Delete */}

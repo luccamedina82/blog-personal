@@ -7,6 +7,9 @@ import type {
   FacultyTopic,
   FacultyNote,
   FacultyDeadline,
+  FacultyTopicCitation,
+  FacultyTopicCitationKind,
+  FacultyDeadlineKind,
 } from './types'
 
 async function getUid(): Promise<string> {
@@ -376,7 +379,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   let avgGrade: number | null = null
   if (aprobadasIds.length > 0) {
     const { data: gradesData, error: gradesError } = await supabase
-      .from('faculty_notes')
+      .from('faculty_deadlines')
       .select('grade')
       .in('subject_id', aprobadasIds)
       .not('grade', 'is', null)
@@ -412,7 +415,7 @@ export async function listAllNotesSummary(): Promise<
     title: n.title,
     subject_id: n.subject_id,
     kind: n.kind as FacultyNote['kind'],
-    subject_name: n.faculty_subjects?.[0]?.name ?? '',
+    subject_name: (() => { const s = n.faculty_subjects; return Array.isArray(s) ? s[0]?.name ?? '' : (s as { name?: string } | null)?.name ?? '' })(),
   }))
 }
 
@@ -438,17 +441,175 @@ export async function listNotesReferencingTitle(
     .map(({ blocks: _b, ...rest }) => rest)
 }
 
+// ── Topic Citations ────────────────────────────────────────────────────────────
+
+export type TopicCitationPayload = {
+  topic_id: string
+  source_kind: FacultyTopicCitationKind
+  source_id: string
+  source_title?: string | null
+  source_storage_path?: string | null
+  page?: number | null
+  note?: string | null
+  order_index?: number
+}
+
+export async function listTopicCitationsForSubject(
+  topicIds: string[],
+): Promise<FacultyTopicCitation[]> {
+  if (topicIds.length === 0) return []
+  const { data, error } = await supabase
+    .from('faculty_topic_citations')
+    .select('*')
+    .in('topic_id', topicIds)
+    .order('order_index', { ascending: true })
+  if (error) throw error
+  return data as FacultyTopicCitation[]
+}
+
+export async function addTopicCitation(
+  payload: TopicCitationPayload,
+): Promise<FacultyTopicCitation> {
+  const user_id = await getUid()
+  const { data, error } = await supabase
+    .from('faculty_topic_citations')
+    .insert({ ...payload, user_id })
+    .select()
+    .single()
+  if (error) throw error
+  return data as FacultyTopicCitation
+}
+
+export async function removeTopicCitation(id: string): Promise<void> {
+  const { error } = await supabase.from('faculty_topic_citations').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ── Deadline enrichment ────────────────────────────────────────────────────────
+
+export async function setDeadlineGrade(id: string, grade: number | null): Promise<void> {
+  const { error } = await supabase.from('faculty_deadlines').update({ grade }).eq('id', id)
+  if (error) throw error
+}
+
+export async function setDeadlineNoteLink(id: string, note_id: string | null): Promise<void> {
+  const { error } = await supabase.from('faculty_deadlines').update({ note_id }).eq('id', id)
+  if (error) throw error
+}
+
+export async function linkGroupToDeadline(
+  groupId: string,
+  deadlineId: string | null,
+): Promise<void> {
+  const { error } = await supabase
+    .from('faculty_topic_groups')
+    .update({ deadline_id: deadlineId })
+    .eq('id', groupId)
+  if (error) throw error
+}
+
+// ── Grades from deadlines ────────────────────────────────────────────────────
+
+export type DeadlineGradeEntry = {
+  id: string
+  title: string
+  kind: FacultyDeadlineKind
+  grade: number
+  due_at: string
+}
+
+export async function listDeadlineGrades(subjectId: string): Promise<DeadlineGradeEntry[]> {
+  const { data, error } = await supabase
+    .from('faculty_deadlines')
+    .select('id, title, kind, grade, due_at')
+    .eq('subject_id', subjectId)
+    .not('grade', 'is', null)
+    .order('due_at', { ascending: true })
+  if (error) throw error
+  return data as DeadlineGradeEntry[]
+}
+
+// ── Topic Citation Backlinks ──────────────────────────────────────────────────
+
+export type TopicCitationBacklink = {
+  citation_id: string
+  topic_id: string
+  topic_title: string
+  subject_id: string
+  subject_name: string
+}
+
+type RawBacklinkRow = {
+  id: string
+  topic_id: string
+  faculty_topics:
+    | { title: string; subject_id: string; faculty_subjects: { name: string } | Array<{ name: string }> | null }
+    | Array<{ title: string; subject_id: string; faculty_subjects: { name: string } | Array<{ name: string }> | null }>
+    | null
+}
+
+function normalizeBacklink(row: RawBacklinkRow): TopicCitationBacklink {
+  const t = Array.isArray(row.faculty_topics) ? row.faculty_topics[0] : row.faculty_topics
+  const s = t?.faculty_subjects
+  const subjectName = Array.isArray(s) ? (s[0]?.name ?? '') : ((s as { name?: string } | null)?.name ?? '')
+  return {
+    citation_id: row.id,
+    topic_id: row.topic_id,
+    topic_title: t?.title ?? '',
+    subject_id: t?.subject_id ?? '',
+    subject_name: subjectName,
+  }
+}
+
+export async function listTopicCitationsForBook(bookId: string): Promise<TopicCitationBacklink[]> {
+  const { data, error } = await supabase
+    .from('faculty_topic_citations')
+    .select('id, topic_id, faculty_topics(title, subject_id, faculty_subjects(name))')
+    .eq('source_kind', 'library_book')
+    .eq('source_id', bookId)
+  if (error) throw error
+  return (data as unknown as RawBacklinkRow[]).map(normalizeBacklink)
+}
+
+export async function listTopicCitationsForNote(
+  sourceKind: 'faculty_note' | 'devlab_post',
+  sourceId: string,
+): Promise<TopicCitationBacklink[]> {
+  const { data, error } = await supabase
+    .from('faculty_topic_citations')
+    .select('id, topic_id, faculty_topics(title, subject_id, faculty_subjects(name))')
+    .eq('source_kind', sourceKind)
+    .eq('source_id', sourceId)
+  if (error) throw error
+  return (data as unknown as RawBacklinkRow[]).map(normalizeBacklink)
+}
+
+export async function listUpcomingExams(days = 30): Promise<FacultyDeadline[]> {
+  const now = new Date()
+  const future = new Date(now.getTime() + days * 24 * 60 * 60 * 1000)
+  const { data, error } = await supabase
+    .from('faculty_deadlines')
+    .select('*')
+    .in('kind', ['parcial', 'final', 'recuperatorio'])
+    .eq('done', false)
+    .gte('due_at', now.toISOString())
+    .lte('due_at', future.toISOString())
+    .order('due_at', { ascending: true })
+  if (error) throw error
+  return data
+}
+
 // ── Grades by semester ─────────────────────────────────────────────────────
 
 export type GradesBySemester = Array<{ semester: string; avg: number; count: number }>
 
 export async function getGradesBySemester(): Promise<GradesBySemester> {
-  const [subjectsRes, notesRes] = await Promise.all([
+  const [subjectsRes, deadlinesRes] = await Promise.all([
     supabase.from('faculty_subjects').select('id, semester'),
-    supabase.from('faculty_notes').select('subject_id, grade').not('grade', 'is', null),
+    supabase.from('faculty_deadlines').select('subject_id, grade').not('grade', 'is', null),
   ])
   if (subjectsRes.error) throw subjectsRes.error
-  if (notesRes.error) throw notesRes.error
+  if (deadlinesRes.error) throw deadlinesRes.error
 
   const semesterMap = new Map(
     (subjectsRes.data as { id: string; semester: string | null }[]).map((s) => [
@@ -458,10 +619,10 @@ export async function getGradesBySemester(): Promise<GradesBySemester> {
   )
 
   const bySemester = new Map<string, number[]>()
-  for (const note of notesRes.data as { subject_id: string; grade: number }[]) {
-    const sem = semesterMap.get(note.subject_id) ?? 'Sin semestre'
+  for (const d of deadlinesRes.data as { subject_id: string; grade: number }[]) {
+    const sem = semesterMap.get(d.subject_id) ?? 'Sin semestre'
     if (!bySemester.has(sem)) bySemester.set(sem, [])
-    bySemester.get(sem)!.push(note.grade)
+    bySemester.get(sem)!.push(d.grade)
   }
 
   return Array.from(bySemester.entries())

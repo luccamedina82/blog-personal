@@ -16,6 +16,7 @@ const KIND_FILTERS: Array<{ value: FacultyNoteKind | 'all'; label: string }> = [
   { value: 'all', label: 'Todas' },
   { value: 'clase', label: 'Clase' },
   { value: 'apunte', label: 'Apunte' },
+  { value: 'resumen', label: 'Resumen' },
   { value: 'tp', label: 'TP' },
   { value: 'parcial', label: 'Parcial' },
   { value: 'final', label: 'Final' },
@@ -27,7 +28,10 @@ const KIND_BADGE: Record<FacultyNoteKind, string> = {
   tp: 'bg-orange-500/10 text-orange-600 border-orange-200 dark:border-orange-800',
   parcial: 'bg-red-500/10 text-red-600 border-red-200 dark:border-red-800',
   final: 'bg-rose-500/10 text-rose-700 border-rose-200 dark:border-rose-800',
+  resumen: 'bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:border-emerald-800',
 }
+
+type FilterValue = FacultyNoteKind | 'all' | 'vinculadas'
 
 type Props = {
   notes: FacultyNote[]
@@ -35,12 +39,16 @@ type Props = {
   onSelect: (note: FacultyNote) => void
   onEdit: (note: FacultyNote) => void
   onDeleted: (id: string) => void
+  linkedToDeadlineIds?: Set<string>
 }
 
-export function NotesList({ notes, onNew, onSelect, onEdit, onDeleted }: Props) {
-  const [filter, setFilter] = useState<FacultyNoteKind | 'all'>('all')
+export function NotesList({ notes, onNew, onSelect, onEdit, onDeleted, linkedToDeadlineIds }: Props) {
+  const [filter, setFilter] = useState<FilterValue>('all')
 
-  const visible = filter === 'all' ? notes : notes.filter((n) => n.kind === filter)
+  const visible =
+    filter === 'all' ? notes
+    : filter === 'vinculadas' ? notes.filter((n) => linkedToDeadlineIds?.has(n.id) ?? false)
+    : notes.filter((n) => n.kind === filter)
 
   async function handleDelete(n: FacultyNote) {
     try {
@@ -71,6 +79,20 @@ export function NotesList({ notes, onNew, onSelect, onEdit, onDeleted }: Props) 
               {f.label}
             </button>
           ))}
+          {linkedToDeadlineIds && linkedToDeadlineIds.size > 0 && (
+            <button
+              type="button"
+              onClick={() => setFilter('vinculadas')}
+              className={cn(
+                'h-7 px-3 rounded-full text-xs transition-colors',
+                filter === 'vinculadas'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground bg-secondary/50 hover:bg-secondary',
+              )}
+            >
+              Vinculadas
+            </button>
+          )}
         </div>
         <Button size="sm" className="gap-1.5 shrink-0" onClick={onNew}>
           <Plus className="size-3.5" />

@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowUpRight, CalendarDays, Eye, Link2, Pencil, Star, Trash2 } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, CalendarDays, Eye, Link2, MapPin, Pencil, Star, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { SaveToAnkiButton } from '@/components/english/anki/save-to-anki-button'
@@ -12,7 +12,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { listNotesReferencingTitle } from '@/lib/faculty/queries'
+import { listNotesReferencingTitle, listTopicCitationsForNote } from '@/lib/faculty/queries'
+import type { TopicCitationBacklink } from '@/lib/faculty/queries'
 import type { FacultyNote, FacultyNoteKind, FacultySubject } from '@/lib/faculty/types'
 import type { DevLabBlock } from '@/lib/devlab/types'
 
@@ -22,6 +23,7 @@ const KIND_LABEL: Record<FacultyNoteKind, string> = {
   tp: 'TP',
   parcial: 'Parcial',
   final: 'Final',
+  resumen: 'Resumen',
 }
 
 const KIND_BADGE: Record<FacultyNoteKind, string> = {
@@ -30,6 +32,7 @@ const KIND_BADGE: Record<FacultyNoteKind, string> = {
   tp: 'bg-orange-500/10 text-orange-600 border-orange-200 dark:border-orange-800',
   parcial: 'bg-red-500/10 text-red-600 border-red-200 dark:border-red-800',
   final: 'bg-rose-500/10 text-rose-700 border-rose-200 dark:border-rose-800',
+  resumen: 'bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:border-emerald-800',
 }
 
 function SignedImage({ path, alt }: { path: string; alt: string }) {
@@ -171,7 +174,7 @@ function TextBlockView({
   )
 }
 
-function BlockRenderer({
+export function BlockRenderer({
   block,
   noteTitle,
   noteId,
@@ -241,10 +244,14 @@ type Props = {
 
 export function NoteView({ note, subject, onBack, onEdit, onDelete, onBacklinkClick, onBacklinkPreview }: Props) {
   const [incomingLinks, setIncomingLinks] = useState<IncomingLink[]>([])
+  const [topicCitations, setTopicCitations] = useState<TopicCitationBacklink[]>([])
 
   useEffect(() => {
     listNotesReferencingTitle(note.title, note.id)
       .then(setIncomingLinks)
+      .catch(() => {})
+    listTopicCitationsForNote('faculty_note', note.id)
+      .then(setTopicCitations)
       .catch(() => {})
   }, [note.id, note.title])
 
@@ -384,6 +391,27 @@ export function NoteView({ note, subject, onBack, onEdit, onDelete, onBacklinkCl
                     </span>
                     <span className="truncate group-hover:underline underline-offset-2">{n.title}</span>
                   </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Topic citations backlinks */}
+        {topicCitations.length > 0 && (
+          <div className="mt-10 max-w-2xl">
+            <div className="h-px bg-border/40 mb-6" />
+            <div className="flex items-center gap-2 mb-4 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              <MapPin className="size-3.5" />
+              Citado en temas
+            </div>
+            <ul className="space-y-1.5">
+              {topicCitations.map((c) => (
+                <li key={c.citation_id} className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span className="inline-block rounded px-1.5 py-0.5 text-[10px] font-medium bg-secondary text-secondary-foreground shrink-0 max-w-[120px] truncate">
+                    {c.subject_name}
+                  </span>
+                  <span className="truncate">{c.topic_title}</span>
                 </li>
               ))}
             </ul>

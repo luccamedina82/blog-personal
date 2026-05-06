@@ -2,8 +2,9 @@ import type { DevLabBlock } from '@/lib/devlab/types'
 
 export type FacultySubjectStatus = 'cursando' | 'final-pendiente' | 'aprobada' | 'recursar'
 export type FacultyTopicStatus = 'pendiente' | 'visto' | 'dominado'
-export type FacultyNoteKind = 'clase' | 'apunte' | 'tp' | 'parcial' | 'final'
+export type FacultyNoteKind = 'clase' | 'apunte' | 'tp' | 'parcial' | 'final' | 'resumen'
 export type FacultyDeadlineKind = 'tp' | 'parcial' | 'final' | 'recuperatorio' | 'entrega'
+export type FacultyTopicCitationKind = 'faculty_note' | 'devlab_post' | 'library_book'
 
 export type FacultySubject = {
   id: string
@@ -24,6 +25,7 @@ export type FacultyTopicGroup = {
   subject_id: string
   title: string
   order_index: number
+  deadline_id: string | null
   created_at: string
 }
 
@@ -71,5 +73,21 @@ export type FacultyDeadline = {
   due_at: string
   done: boolean
   note: string | null
+  grade: number | null
+  note_id: string | null
+  created_at: string
+}
+
+export type FacultyTopicCitation = {
+  id: string
+  user_id: string
+  topic_id: string
+  source_kind: FacultyTopicCitationKind
+  source_id: string
+  source_title: string | null
+  source_storage_path: string | null
+  page: number | null
+  note: string | null
+  order_index: number
   created_at: string
 }

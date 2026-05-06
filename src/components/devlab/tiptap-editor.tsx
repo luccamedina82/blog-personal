@@ -4,7 +4,7 @@ import Underline from '@tiptap/extension-underline'
 import Placeholder from '@tiptap/extension-placeholder'
 import { Bold, Italic, Underline as UnderlineIcon, BookOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useBacklinkSuggestions } from '@/lib/faculty/backlinks-context'
 import { BookCitationExtension } from '@/lib/faculty/book-citation-extension'
 import { BookCitationPicker } from '@/components/library/book-citation-picker'
@@ -25,6 +25,13 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!dropdownRef.current) return
+    const el = dropdownRef.current.querySelector('[data-active="true"]') as HTMLElement | null
+    el?.scrollIntoView({ block: 'nearest' })
+  }, [activeIndex])
 
   const filtered =
     query !== null && allSuggestions.length > 0
@@ -70,10 +77,9 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
         if (containerRef.current) {
           try {
             const coords = e.view.coordsAtPos(from)
-            const rect = containerRef.current.getBoundingClientRect()
             setDropdownPos({
-              top: coords.bottom - rect.top + 4,
-              left: Math.min(coords.left - rect.left, rect.width - 240),
+              top: coords.bottom + 4,
+              left: Math.min(coords.left, window.innerWidth - 260),
             })
           } catch {
             setDropdownPos(null)
@@ -184,7 +190,8 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
       {/* [[backlink]] autocomplete dropdown — anchored to cursor position */}
       {filtered.length > 0 && dropdownPos && (
         <div
-          className="absolute z-50 rounded-md border border-border bg-popover shadow-lg py-1 w-64 max-h-[220px] overflow-y-auto"
+          ref={dropdownRef}
+          className="fixed z-[200] rounded-md border border-border bg-popover shadow-lg py-1 w-64 max-h-[220px] overflow-y-auto"
           style={{ top: dropdownPos.top, left: dropdownPos.left }}
         >
           <p className="px-3 py-1 text-[10px] uppercase tracking-wider text-muted-foreground/70">
@@ -194,6 +201,7 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
             <button
               key={s.id}
               type="button"
+              data-active={String(i === activeIndex)}
               onMouseDown={(e) => {
                 e.preventDefault()
                 insertBacklink(s.title)

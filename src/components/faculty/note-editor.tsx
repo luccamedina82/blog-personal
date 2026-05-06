@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
 import { DevLabPostEditor } from '@/components/devlab-post-editor'
 import { createFacultyNote, updateFacultyNote, listAllNotesSummary } from '@/lib/faculty/queries'
+import { listAllDevLabPostsSummary } from '@/lib/devlab/queries'
 import { replaceCitationsForNote } from '@/lib/library/queries'
 import { BacklinkSuggestionsContext } from '@/lib/faculty/backlinks-context'
 import type {
@@ -19,9 +20,10 @@ import type { PostDraft } from '@/components/devlab-post-editor'
 const KIND_OPTIONS: Array<{ value: FacultyNoteKind; label: string }> = [
   { value: 'clase', label: 'Clase' },
   { value: 'apunte', label: 'Apunte' },
-  { value: 'tp', label: 'TP' },
-  { value: 'parcial', label: 'Parcial' },
-  { value: 'final', label: 'Final' },
+  { value: 'resumen', label: 'Resumen' },
+  { value: 'tp', label: 'TP (legacy)' },
+  { value: 'parcial', label: 'Parcial (legacy)' },
+  { value: 'final', label: 'Final (legacy)' },
 ]
 
 const GRADED_KINDS: FacultyNoteKind[] = ['tp', 'parcial', 'final']
@@ -50,14 +52,18 @@ export function FacultyNoteEditor({
   const [suggestions, setSuggestions] = useState<Array<{ id: string; title: string; hint?: string }>>([])
 
   useEffect(() => {
-    listAllNotesSummary()
-      .then((rows) =>
-        setSuggestions(
-          rows
-            .filter((n) => !initial || n.id !== initial.id)
-            .map((n) => ({ id: n.id, title: n.title, hint: n.subject_name || n.kind })),
-        ),
-      )
+    Promise.all([listAllNotesSummary(), listAllDevLabPostsSummary()])
+      .then(([notes, posts]) => {
+        const noteSuggestions = notes
+          .filter((n) => !initial || n.id !== initial.id)
+          .map((n) => ({ id: n.id, title: n.title, hint: n.subject_name || n.kind }))
+        const postSuggestions = posts.map((p) => ({
+          id: p.id,
+          title: p.title,
+          hint: p.category_label ? `DevLab · ${p.category_label}` : 'DevLab',
+        }))
+        setSuggestions([...noteSuggestions, ...postSuggestions])
+      })
       .catch(() => {})
   }, [initial?.id])
 

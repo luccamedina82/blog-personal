@@ -999,6 +999,57 @@ export type BookCitation = {
 - [ ] En `BookDetail`: si tiene library link, botón "Leer PDF" → abre `PdfViewer` modal o split panel
 - [ ] Quotes existentes en `book_annotations` ya tienen campo `page` — referenciable a página del PDF
 
+#### 10h — Temario ↔ Citas + Reestructura Parciales/TP/Finales
+
+> **Motivación:** (1) cada tema del temario debe poder citar notas (faculty/devlab) y libros (library) → un solo hub por tema con todo lo necesario para estudiar. (2) Parciales/TPs/finales hoy viven como `faculty_notes.kind in (tp,parcial,final)`, pero conceptualmente son **eventos con fecha + nota numérica**, no apuntes. Pasan a ser `faculty_deadlines` con nota opcional asociada (preparación/repaso/devolución). (3) `faculty_topic_groups` (Parcial 1, Final, etc.) pueden vivir libres O vincularse a un deadline → al vencer la fecha aparece botón "Cargar devolución" que crea/abre la nota linkeada.
+
+> **Diseño dual:** deadlines = fuente de verdad de eventos calificables. `faculty_notes` = solo apuntes/resumenes/repasos. Group → deadline (n:1, opcional). Deadline → note (1:1 opcional). Topic → citas (n:m con notas/posts/libros). El "qué estudiar para el próximo parcial" se navega: dashboard → deadline → group vinculado → unidades → temas → citas.
+
+##### Schema
+- [x] `supabase/migrations/0006_topic_citations_and_deadlines.sql` creado (2026-05-06) — **correr en SQL editor Supabase**
+- [ ] Script migración manual (SQL editor): para cada `faculty_notes` con kind in (tp,parcial,final) → insertar `faculty_deadlines` → `deadline.note_id = note.id` → `note.kind = 'apunte'`
+- [x] Tipos TS actualizados en `src/lib/faculty/types.ts` (2026-05-06)
+
+##### Queries
+- [x] `src/lib/faculty/queries.ts` (2026-05-06):
+  - `listTopicCitationsForSubject`, `addTopicCitation`, `removeTopicCitation`
+  - `linkGroupToDeadline`, `setDeadlineNoteLink`, `setDeadlineGrade`
+  - `listDeadlineGrades(subjectId)` — fuente de verdad para GradesTab
+  - `getDashboardStats` y `getGradesBySemester` → leen de `faculty_deadlines.grade`
+- [x] `listTopicCitationsForBook`, `listTopicCitationsForNote` — backlinks inversos (2026-05-06)
+
+##### UI — Citas en temas
+- [x] `src/components/faculty/topic-citation-picker.tsx` — Dialog 3 tabs (Notas/DevLab/Libros), search, page para libros (2026-05-06)
+- [x] `TopicList` — botón Link2 por tema (hover), chips debajo, click → panel lateral (2026-05-06)
+- [x] Chips: 📝 faculty_note → NotePreviewPanel, 🧪 devlab → DevLabPreviewPanel, 📖 library → openPdf at page (2026-05-06)
+- [x] `citationsByTopic` state en `$subjectId.tsx`, carga lazy post-fetch de topics (2026-05-06)
+- [x] En `/library` BookDetail: "Temas que citan este libro" — strip en Sheet (2026-05-06)
+- [x] En `NoteView`: "Temas que citan esta nota" — sección bajo "Referenciada por" (2026-05-06)
+
+##### UI — Topic Groups ↔ Deadlines
+- [x] `TopicList` grupo header: select inline para vincular a deadline (examDeadlines) (2026-05-06)
+- [x] Header grupo: `CountdownBadge` si `deadline_id` vinculado (2026-05-06)
+
+##### UI — Deadlines como fuente de verdad
+- [x] `DeadlineCard` (2026-05-06): grade input inline autosave, "Ver apuntes" si note_id, "Cargar apuntes" siempre visible
+- [x] `handleCreateDeadlineNote` en `$subjectId.tsx`: crea nota kind='resumen' + link + abre editor (2026-05-06)
+- [x] Dashboard `/faculty/index.tsx`: sección "Próximos parciales/finales" (30 días) con ExamCard (2026-05-06)
+- [x] `NotesList`: filtro "Vinculadas" — notas cuyo id está en `deadline.note_id` (2026-05-06)
+
+##### Grades tracker
+- [x] `GradesTab` → `listDeadlineGrades(subjectId)` (2026-05-06)
+- [x] `getDashboardStats` avgGrade → `faculty_deadlines` (2026-05-06)
+- [x] `getGradesBySemester` → `faculty_deadlines` (2026-05-06)
+
+**Salida:** temas estudiables como hub (citas → notas faculty/devlab + libros con página específica), parciales/TPs/finales son deadlines con nota opcional + grade + grupo de temario vinculado, dashboard muestra "qué estudiar para el próximo parcial" navegando deadline → group → unidades → temas → citas → split panel PDF/nota.
+
+**TECH DEBT marcada (extender sección 7):**
+- Auto-cita por keyword: scan notas existentes y proponer citarlas a temas con match de título/tags
+- Versionado/snapshot del temario por parcial (foto pre-parcial vs post-parcial)
+- Drag-and-drop de citas entre temas con `@dnd-kit`
+- Métrica "tiempo estudiado por tema" (link con `/personal` habits si se trackea)
+- Re-asignación masiva: mover todas las notas con kind=apunte de una materia a un grupo recién creado
+
 **Salida:** biblioteca central de PDFs con upload+thumbnails, citas a página específica desde notas faculty/devlab, vista split editor↔PDF, preview lateral de backlinks reusando mismo componente split, cross-link con módulo english.
 
 **TECH DEBT marcada (ver sección 7):**
@@ -1190,7 +1241,7 @@ VITE_SUPABASE_ANON_KEY
 ---
 
 **Última actualización:** 2026-05-06
-**Estado:** Fases 0–7 COMPLETAS. Fase 8 (Faculty MVP) COMPLETA. Fase 9a/9a.5/9b/9c COMPLETAS. Pendiente: 9d (Export PDF apunte). Fase 10a/10b/10c/10d/10e/10f COMPLETAS. Pendiente: 10g (cross-link english ↔ biblioteca). Siguiente: 10g o Fase 11 (Personal).
+**Estado:** Fases 0–7 COMPLETAS. Fase 8 COMPLETA. Fase 9a/9a.5/9b/9c COMPLETAS. Pendiente: 9d (Export PDF). Fase 10a–10f COMPLETAS. **Fase 10h PARCIALMENTE COMPLETA** (core implementado, ver pendientes). Pendiente: 10g, 10h (pendientes menores: backlinks inversos, dashboard parciales, filtro notas-deadline). Siguiente: correr migración SQL 0006 en Supabase → probar en app → cerrar 10h pendientes → Fase 11.
 
 
 

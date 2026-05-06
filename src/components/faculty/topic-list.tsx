@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Trash2, ChevronUp, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Link2, X, BookOpen, FileText, FlaskConical } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -8,18 +8,36 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { TopicCitationPicker, type CitationResult } from './topic-citation-picker'
+import { CountdownBadge } from './countdown-badge'
 import {
   createFacultyTopic, updateFacultyTopic, deleteFacultyTopic,
   createFacultyTopicGroup, updateFacultyTopicGroup, deleteFacultyTopicGroup,
   createFacultyTopicUnit, updateFacultyTopicUnit, deleteFacultyTopicUnit,
+  addTopicCitation, removeTopicCitation, linkGroupToDeadline,
 } from '@/lib/faculty/queries'
-import type { FacultyTopic, FacultyTopicStatus, FacultyTopicGroup, FacultyTopicUnit } from '@/lib/faculty/types'
+import type {
+  FacultyTopic, FacultyTopicStatus, FacultyTopicGroup, FacultyTopicUnit,
+  FacultyTopicCitation, FacultyTopicCitationKind, FacultyDeadline,
+} from '@/lib/faculty/types'
 
 const STATUS_OPTIONS: Array<{ value: FacultyTopicStatus; label: string }> = [
   { value: 'pendiente', label: 'Pendiente' },
   { value: 'visto', label: 'Visto' },
   { value: 'dominado', label: 'Dominado' },
 ]
+
+const CITATION_ICON: Record<FacultyTopicCitationKind, React.ElementType> = {
+  faculty_note: FileText,
+  devlab_post: FlaskConical,
+  library_book: BookOpen,
+}
+
+const CITATION_PREFIX: Record<FacultyTopicCitationKind, string> = {
+  faculty_note: '📝',
+  devlab_post: '🧪',
+  library_book: '📖',
+}
 
 type AddingIn =
   | { kind: 'group' }
@@ -38,6 +56,8 @@ type Props = {
   groups: FacultyTopicGroup[]
   units: FacultyTopicUnit[]
   topics: FacultyTopic[]
+  deadlines: FacultyDeadline[]
+  citationsByTopic: Map<string, FacultyTopicCitation[]>
   onGroupCreated: (g: FacultyTopicGroup) => void
   onGroupUpdated: (g: FacultyTopicGroup) => void
   onGroupDeleted: (id: string) => void
@@ -47,6 +67,9 @@ type Props = {
   onTopicCreated: (t: FacultyTopic) => void
   onTopicUpdated: (t: FacultyTopic) => void
   onTopicDeleted: (id: string) => void
+  onCitationAdded: (topicId: string, citation: FacultyTopicCitation) => void
+  onCitationRemoved: (topicId: string, citationId: string) => void
+  onCitationClick: (citation: FacultyTopicCitation) => void
 }
 
 function MiniProgress({ dominado, total }: { dominado: number; total: number }) {
@@ -68,6 +91,8 @@ export function TopicList({
   groups,
   units,
   topics,
+  deadlines,
+  citationsByTopic,
   onGroupCreated,
   onGroupUpdated,
   onGroupDeleted,
@@ -77,6 +102,9 @@ export function TopicList({
   onTopicCreated,
   onTopicUpdated,
   onTopicDeleted,
+  onCitationAdded,
+  onCitationRemoved,
+  onCitationClick,
 }: Props) {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [collapsedUnits, setCollapsedUnits] = useState<Set<string>>(new Set())
@@ -84,12 +112,25 @@ export function TopicList({
   const [addTitle, setAddTitle] = useState('')
   const [editing, setEditing] = useState<Editing>(null)
   const [editTitle, setEditTitle] = useState('')
+  const [pickerTopicId, setPickerTopicId] = useState<string | null>(null)
 
   const sortedGroups = [...groups].sort((a, b) => a.order_index - b.order_index)
   const unclassified = topics.filter((t) => !t.unit_id).sort((a, b) => a.order_index - b.order_index)
   const totalDominado = topics.filter((t) => t.status === 'dominado').length
   const overallProgress = topics.length > 0 ? Math.round((totalDominado / topics.length) * 100) : 0
   const showUnclassified = sortedGroups.length === 0 || unclassified.length > 0
+  const examDeadlines = deadlines.filter((d) =>
+    ['parcial', 'final', 'recuperatorio'].includes(d.kind),
+  )
+
+  async function handleLinkDeadline(group: FacultyTopicGroup, deadlineId: string | null) {
+    try {
+      await linkGroupToDeadline(group.id, deadlineId)
+      onGroupUpdated({ ...group, deadline_id: deadlineId })
+    } catch {
+      toast.error('Error al vincular')
+    }
+  }
 
   function startAdding(what: AddingIn) {
     setAddingIn(what)
@@ -258,111 +299,188 @@ export function TopicList({
     }
   }
 
+  async function handleCitationConfirm(topicId: string, result: CitationResult) {
+    try {
+      const citations = citationsByTopic.get(topicId) ?? []
+      const nextIndex = citations.length > 0 ? Math.max(...citations.map((c) => c.order_index)) + 1 : 0
+      const created = await addTopicCitation({
+        topic_id: topicId,
+        source_kind: result.source_kind,
+        source_id: result.source_id,
+        source_title: result.source_title,
+        source_storage_path: result.source_storage_path,
+        page: result.page,
+        order_index: nextIndex,
+      })
+      onCitationAdded(topicId, created)
+      toast.success('Cita agregada')
+    } catch {
+      toast.error('Error al citar')
+    }
+  }
+
+  async function handleRemoveCitation(topicId: string, citationId: string) {
+    try {
+      await removeTopicCitation(citationId)
+      onCitationRemoved(topicId, citationId)
+    } catch {
+      toast.error('Error al eliminar cita')
+    }
+  }
+
+  function renderCitationChips(topicId: string) {
+    const citations = citationsByTopic.get(topicId) ?? []
+    if (citations.length === 0) return null
+    return (
+      <div className="flex flex-wrap gap-1 mt-1.5 pl-8">
+        {citations.map((c) => {
+          const IconComp = CITATION_ICON[c.source_kind]
+          return (
+            <div
+              key={c.id}
+              className="group/chip flex items-center gap-1 h-5 rounded-full bg-secondary/60 border border-border/50 px-2 text-[10px] text-muted-foreground"
+            >
+              <button
+                type="button"
+                onClick={() => onCitationClick(c)}
+                className="flex items-center gap-1 hover:text-foreground transition-colors min-w-0"
+                title={c.source_title ?? undefined}
+              >
+                <IconComp className="size-2.5 shrink-0" />
+                <span className="truncate max-w-[120px]">
+                  {CITATION_PREFIX[c.source_kind]} {c.source_title}
+                  {c.page != null && ` p.${c.page}`}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRemoveCitation(topicId, c.id)}
+                className="opacity-0 group-hover/chip:opacity-100 text-muted-foreground/50 hover:text-destructive transition-all ml-0.5 shrink-0"
+                title="Quitar cita"
+              >
+                <X className="size-2.5" />
+              </button>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
   function renderTopicRows(sortedTopics: FacultyTopic[]) {
     if (sortedTopics.length === 0) return null
     return (
-      <ul className="space-y-0.5 mb-1.5">
+      <ul className="space-y-1 mb-1.5">
         {sortedTopics.map((t, i) => (
-          <li
-            key={t.id}
-            className="group flex items-center gap-2 rounded border border-border/40 bg-card/30 px-2.5 py-1.5"
-          >
-            <div className="flex flex-col shrink-0">
-              <button
-                type="button"
-                onClick={() => moveTopic(sortedTopics, i, -1)}
-                disabled={i === 0}
-                className="text-muted-foreground/40 hover:text-muted-foreground transition-colors disabled:opacity-0 disabled:pointer-events-none"
-              >
-                <ChevronUp className="size-3" />
-              </button>
-              <button
-                type="button"
-                onClick={() => moveTopic(sortedTopics, i, 1)}
-                disabled={i === sortedTopics.length - 1}
-                className="text-muted-foreground/40 hover:text-muted-foreground transition-colors disabled:opacity-0 disabled:pointer-events-none"
-              >
-                <ChevronDown className="size-3" />
-              </button>
-            </div>
+          <li key={t.id} className="group/topic">
+            <div className="flex items-center gap-2 rounded border border-border/40 bg-card/30 px-2.5 py-1.5">
+              <div className="flex flex-col shrink-0">
+                <button
+                  type="button"
+                  onClick={() => moveTopic(sortedTopics, i, -1)}
+                  disabled={i === 0}
+                  className="text-muted-foreground/40 hover:text-muted-foreground transition-colors disabled:opacity-0 disabled:pointer-events-none"
+                >
+                  <ChevronUp className="size-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveTopic(sortedTopics, i, 1)}
+                  disabled={i === sortedTopics.length - 1}
+                  className="text-muted-foreground/40 hover:text-muted-foreground transition-colors disabled:opacity-0 disabled:pointer-events-none"
+                >
+                  <ChevronDown className="size-3" />
+                </button>
+              </div>
 
-            <span
-              className={cn(
-                'shrink-0 size-2 rounded-full',
-                t.status === 'dominado' && 'bg-green-500',
-                t.status === 'visto' && 'bg-blue-400',
-                t.status === 'pendiente' && 'bg-muted-foreground/25',
-              )}
-            />
-
-            {editing?.kind === 'topic' && editing.id === t.id ? (
-              <input
-                autoFocus
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                onBlur={commitEdit}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitEdit()
-                  if (e.key === 'Escape') setEditing(null)
-                }}
-                className="flex-1 min-w-0 bg-transparent text-sm outline-none border-b border-primary/40 py-0.5"
-              />
-            ) : (
               <span
-                className="flex-1 min-w-0 text-sm truncate cursor-text"
-                onDoubleClick={() => {
-                  setEditing({ kind: 'topic', id: t.id })
-                  setEditTitle(t.title)
-                }}
-              >
-                {t.title}
-              </span>
-            )}
+                className={cn(
+                  'shrink-0 size-2 rounded-full',
+                  t.status === 'dominado' && 'bg-green-500',
+                  t.status === 'visto' && 'bg-blue-400',
+                  t.status === 'pendiente' && 'bg-muted-foreground/25',
+                )}
+              />
 
-            <select
-              value={t.status}
-              onChange={(e) => handleStatusChange(t, e.target.value as FacultyTopicStatus)}
-              className={cn(
-                'shrink-0 h-6 rounded border border-border/60 bg-card/40 px-1.5 text-[11px] outline-none focus:border-primary/40 transition-colors',
-                t.status === 'dominado' && 'text-green-600',
-                t.status === 'visto' && 'text-blue-500',
-                t.status === 'pendiente' && 'text-muted-foreground',
+              {editing?.kind === 'topic' && editing.id === t.id ? (
+                <input
+                  autoFocus
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  onBlur={commitEdit}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitEdit()
+                    if (e.key === 'Escape') setEditing(null)
+                  }}
+                  className="flex-1 min-w-0 bg-transparent text-sm outline-none border-b border-primary/40 py-0.5"
+                />
+              ) : (
+                <span
+                  className="flex-1 min-w-0 text-sm truncate cursor-text"
+                  onDoubleClick={() => {
+                    setEditing({ kind: 'topic', id: t.id })
+                    setEditTitle(t.title)
+                  }}
+                >
+                  {t.title}
+                </span>
               )}
-            >
-              {STATUS_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
 
-            <div className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex items-center justify-center size-6 rounded text-muted-foreground/50 hover:text-destructive hover:bg-secondary transition-colors"
-                  >
-                    <Trash2 className="size-3" />
-                  </button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>¿Eliminar "{t.title}"?</AlertDialogTitle>
-                    <AlertDialogDescription>No se puede deshacer.</AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => handleDeleteTopic(t)}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              <select
+                value={t.status}
+                onChange={(e) => handleStatusChange(t, e.target.value as FacultyTopicStatus)}
+                className={cn(
+                  'shrink-0 h-6 rounded border border-border/60 bg-card/40 px-1.5 text-[11px] outline-none focus:border-primary/40 transition-colors',
+                  t.status === 'dominado' && 'text-green-600',
+                  t.status === 'visto' && 'text-blue-500',
+                  t.status === 'pendiente' && 'text-muted-foreground',
+                )}
+              >
+                {STATUS_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+
+              <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover/topic:opacity-100 transition-opacity">
+                <button
+                  type="button"
+                  onClick={() => setPickerTopicId(t.id)}
+                  title="Citar recurso"
+                  className="flex items-center gap-1 h-6 px-1.5 rounded text-[10px] text-muted-foreground/50 hover:text-primary hover:bg-primary/10 transition-colors"
+                >
+                  <Link2 className="size-3" />
+                </button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex items-center justify-center size-6 rounded text-muted-foreground/50 hover:text-destructive hover:bg-secondary transition-colors"
                     >
-                      Eliminar
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+                      <Trash2 className="size-3" />
+                    </button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>¿Eliminar "{t.title}"?</AlertDialogTitle>
+                      <AlertDialogDescription>No se puede deshacer.</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => handleDeleteTopic(t)}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Eliminar
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             </div>
+
+            {renderCitationChips(t.id)}
           </li>
         ))}
       </ul>
@@ -504,6 +622,25 @@ export function TopicList({
               {gTopics.length > 0 && (
                 <MiniProgress dominado={gDominado} total={gTopics.length} />
               )}
+
+              {/* Deadline link selector */}
+              {examDeadlines.length > 0 && (
+                <select
+                  value={group.deadline_id ?? ''}
+                  onChange={(e) => handleLinkDeadline(group, e.target.value || null)}
+                  className="shrink-0 h-6 rounded border border-border/60 bg-card/40 px-1.5 text-[11px] outline-none focus:border-primary/40 transition-colors text-muted-foreground max-w-[130px]"
+                  title="Vincular a examen"
+                >
+                  <option value="">Sin examen</option>
+                  {examDeadlines.map((d) => (
+                    <option key={d.id} value={d.id}>{d.title}</option>
+                  ))}
+                </select>
+              )}
+              {group.deadline_id && (() => {
+                const linked = deadlines.find((d) => d.id === group.deadline_id)
+                return linked ? <CountdownBadge dueAt={linked.due_at} done={linked.done} /> : null
+              })()}
 
               <div className="flex flex-col shrink-0">
                 <button
@@ -787,6 +924,15 @@ export function TopicList({
           <Plus className="size-3.5" /> Agregar grupo
         </button>
       )}
+
+      {/* Citation picker dialog */}
+      <TopicCitationPicker
+        open={pickerTopicId !== null}
+        onOpenChange={(v) => { if (!v) setPickerTopicId(null) }}
+        onConfirm={(result) => {
+          if (pickerTopicId) handleCitationConfirm(pickerTopicId, result)
+        }}
+      />
     </div>
   )
 }

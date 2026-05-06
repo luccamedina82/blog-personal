@@ -3,11 +3,12 @@ import React, { useEffect, useState, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Bookmark, ExternalLink, X } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { PdfViewer } from '@/components/library/pdf-viewer'
 import { PdfPanelContext } from '@/lib/faculty/pdf-panel-context'
 import { FacultyShell } from '@/components/faculty/faculty-shell'
 import { NotesList } from '@/components/faculty/notes-list'
-import { NoteView, NotePreviewPanel } from '@/components/faculty/note-view'
+import { NoteView, NotePreviewPanel, BlockRenderer } from '@/components/faculty/note-view'
 import { FacultyNoteEditor } from '@/components/faculty/note-editor'
 import { DeadlineList } from '@/components/faculty/deadline-list'
 import { TopicList } from '@/components/faculty/topic-list'
@@ -20,9 +21,14 @@ import {
   listFacultyTopics,
   listFacultyTopicGroups,
   listFacultyTopicUnits,
+  listTopicCitationsForSubject,
   listAllNotesSummary,
   deleteFacultyNote,
+  createFacultyNote,
+  setDeadlineNoteLink,
 } from '@/lib/faculty/queries'
+import { getDevLabPost, listAllDevLabPostsSummary } from '@/lib/devlab/queries'
+import type { DevLabPost } from '@/lib/devlab/types'
 import type {
   FacultySubject,
   FacultyNote,
@@ -30,6 +36,7 @@ import type {
   FacultyTopic,
   FacultyTopicGroup,
   FacultyTopicUnit,
+  FacultyTopicCitation,
 } from '@/lib/faculty/types'
 
 export const Route = createFileRoute('/faculty/$subjectId')({
@@ -54,9 +61,13 @@ type CitationCtx = {
 type RightPanel =
   | { kind: 'pdf'; storagePath: string; page: number }
   | { kind: 'note-preview'; note: FacultyNote }
+  | { kind: 'devlab-preview'; post: DevLabPost }
 
-// title → { id, subject_id } for cross-subject navigation
-type NoteIndex = Map<string, { id: string; subject_id: string }>
+// title → entry for cross-subject and devlab navigation
+type NoteIndexEntry =
+  | { id: string; type: 'faculty'; subject_id: string }
+  | { id: string; type: 'devlab'; category_id: string | null }
+type NoteIndex = Map<string, NoteIndexEntry>
 
 function SubjectDetail() {
   const { subjectId } = Route.useParams()
@@ -69,6 +80,7 @@ function SubjectDetail() {
   const [topics, setTopics] = useState<FacultyTopic[]>([])
   const [groups, setGroups] = useState<FacultyTopicGroup[]>([])
   const [units, setUnits] = useState<FacultyTopicUnit[]>([])
+  const [citationsByTopic, setCitationsByTopic] = useState<Map<string, FacultyTopicCitation[]>>(new Map())
   const [noteIndex, setNoteIndex] = useState<NoteIndex>(new Map())
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<View>({ kind: 'list' })
@@ -112,16 +124,16 @@ function SubjectDetail() {
       setRightPanel((prev) => (prev?.kind === 'note-preview' ? null : prev))
       return
     }
-    // Cross-subject: navigate to that subject's page, passing noteId as search param
-    const cross = noteIndex.get(title)
-    if (cross) {
+    const entry = noteIndex.get(title)
+    if (!entry) { toast.error(`"${title}" no encontrado`); return }
+    if (entry.type === 'devlab') {
+      navigate({ to: '/devlab', search: { post: entry.id, category: entry.category_id ?? undefined } })
+    } else {
       navigate({
         to: '/faculty/$subjectId',
-        params: { subjectId: cross.subject_id },
-        search: { note: cross.id },
+        params: { subjectId: entry.subject_id },
+        search: { note: entry.id },
       })
-    } else {
-      toast.error(`Nota "${title}" no encontrada`)
     }
   }
 
@@ -134,16 +146,20 @@ function SubjectDetail() {
       setRightPanel({ kind: 'note-preview', note: local })
       return
     }
-    // Cross-subject: fetch full note from DB
-    const cross = noteIndex.get(title)
-    if (!cross) { toast.error(`Nota "${title}" no encontrada`); return }
+    const entry = noteIndex.get(title)
+    if (!entry) { toast.error(`"${title}" no encontrado`); return }
+    setCitationCtx(null)
+    insertFnRef.current = null
     try {
-      const note = await getFacultyNote(cross.id)
-      setCitationCtx(null)
-      insertFnRef.current = null
-      setRightPanel({ kind: 'note-preview', note })
+      if (entry.type === 'devlab') {
+        const post = await getDevLabPost(entry.id)
+        setRightPanel({ kind: 'devlab-preview', post })
+      } else {
+        const note = await getFacultyNote(entry.id)
+        setRightPanel({ kind: 'note-preview', note })
+      }
     } catch {
-      toast.error('Error al cargar nota')
+      toast.error('Error al cargar')
     }
   }
 
@@ -171,15 +187,32 @@ function SubjectDetail() {
       listFacultyTopicGroups(subjectId),
       listFacultyTopicUnits(subjectId),
       listAllNotesSummary(),
+      listAllDevLabPostsSummary(),
     ])
-      .then(([s, n, d, t, g, u, allNotes]) => {
+      .then(([s, n, d, t, g, u, allNotes, allPosts]) => {
         setSubject(s)
         setNotes(n)
         setDeadlines(d)
         setTopics(t)
         setGroups(g)
         setUnits(u)
-        setNoteIndex(new Map(allNotes.map((an) => [an.title, { id: an.id, subject_id: an.subject_id }])))
+        const idx: NoteIndex = new Map()
+        for (const an of allNotes) idx.set(an.title, { id: an.id, type: 'faculty', subject_id: an.subject_id })
+        for (const ap of allPosts) idx.set(ap.title, { id: ap.id, type: 'devlab', category_id: ap.category_id })
+        setNoteIndex(idx)
+        // Load citations for all topics
+        if (t.length > 0) {
+          listTopicCitationsForSubject(t.map((x) => x.id))
+            .then((citations) => {
+              const map = new Map<string, FacultyTopicCitation[]>()
+              for (const c of citations) {
+                if (!map.has(c.topic_id)) map.set(c.topic_id, [])
+                map.get(c.topic_id)!.push(c)
+              }
+              setCitationsByTopic(map)
+            })
+            .catch(() => {})
+        }
       })
       .catch(() => toast.error('Error al cargar materia'))
       .finally(() => setLoading(false))
@@ -195,6 +228,78 @@ function SubjectDetail() {
       navigate({ to: '/faculty/$subjectId', params: { subjectId }, search: { note: undefined }, replace: true })
     }
   }, [search.note, notes])
+
+  function handleCitationAdded(topicId: string, citation: FacultyTopicCitation) {
+    setCitationsByTopic((prev) => {
+      const next = new Map(prev)
+      next.set(topicId, [...(next.get(topicId) ?? []), citation])
+      return next
+    })
+  }
+
+  function handleCitationRemoved(topicId: string, citationId: string) {
+    setCitationsByTopic((prev) => {
+      const next = new Map(prev)
+      next.set(topicId, (next.get(topicId) ?? []).filter((c) => c.id !== citationId))
+      return next
+    })
+  }
+
+  async function handleCitationClick(citation: FacultyTopicCitation) {
+    if (citation.source_kind === 'library_book') {
+      if (citation.source_storage_path) {
+        pdfCtxValue.openPdf(citation.source_storage_path, citation.page ?? 1)
+      }
+    } else if (citation.source_kind === 'faculty_note') {
+      const local = notes.find((n) => n.id === citation.source_id)
+      if (local) {
+        setRightPanel({ kind: 'note-preview', note: local })
+      } else {
+        try {
+          const note = await getFacultyNote(citation.source_id)
+          setRightPanel({ kind: 'note-preview', note })
+        } catch {
+          toast.error('Error al cargar nota')
+        }
+      }
+    } else {
+      try {
+        const post = await getDevLabPost(citation.source_id)
+        setRightPanel({ kind: 'devlab-preview', post })
+      } catch {
+        toast.error('Error al cargar post')
+      }
+    }
+  }
+
+  function handleViewDeadlineNote(noteId: string) {
+    const note = notes.find((n) => n.id === noteId)
+    if (note) {
+      setView({ kind: 'note', noteId: note.id })
+    }
+  }
+
+  async function handleCreateDeadlineNote(d: FacultyDeadline) {
+    try {
+      const created = await createFacultyNote({
+        subject_id: subjectId,
+        topic_id: null,
+        kind: 'resumen',
+        title: `Devolución — ${d.title}`,
+        date: new Date().toISOString().split('T')[0],
+        blocks: [],
+        tags: [],
+        grade: null,
+      })
+      await setDeadlineNoteLink(d.id, created.id)
+      setNotes((prev) => [created, ...prev])
+      setDeadlines((prev) => prev.map((x) => (x.id === d.id ? { ...x, note_id: created.id } : x)))
+      setView({ kind: 'editor', editNote: created })
+      toast.success('Nota creada')
+    } catch {
+      toast.error('Error al crear nota')
+    }
+  }
 
   if (loading) {
     return (
@@ -242,6 +347,13 @@ function SubjectDetail() {
           citationCtx={citationCtx}
           onCiteAtPage={handleCiteAtPage}
           onOpenFullNote={handleOpenFullNote}
+          onOpenDevLabPost={() => {
+            if (rightPanel?.kind !== 'devlab-preview') return
+            navigate({
+              to: '/devlab',
+              search: { post: rightPanel.post.id, category: rightPanel.post.category_id ?? undefined },
+            })
+          }}
           onNoteBacklinkClick={handleBacklinkNavigate}
           onNoteBacklinkPreview={handleBacklinkPreview}
         >
@@ -270,6 +382,13 @@ function SubjectDetail() {
           citationCtx={citationCtx}
           onCiteAtPage={handleCiteAtPage}
           onOpenFullNote={handleOpenFullNote}
+          onOpenDevLabPost={() => {
+            if (rightPanel?.kind !== 'devlab-preview') return
+            navigate({
+              to: '/devlab',
+              search: { post: rightPanel.post.id, category: rightPanel.post.category_id ?? undefined },
+            })
+          }}
           onNoteBacklinkClick={handleBacklinkNavigate}
           onNoteBacklinkPreview={handleBacklinkPreview}
         >
@@ -298,6 +417,10 @@ function SubjectDetail() {
   // ── Subject detail (list) ─────────────────────────────────────────────────
 
   const pendingDeadlines = deadlines.filter((d) => !d.done).length
+  const linkedNoteIds = useMemo(
+    () => new Set(deadlines.map((d) => d.note_id).filter((id): id is string => id !== null)),
+    [deadlines],
+  )
 
   return (
     <FacultyShell
@@ -312,7 +435,6 @@ function SubjectDetail() {
           {/* Tabs */}
           <div className="flex gap-0 border-b border-border mb-6">
             {(['notas', 'deadlines', 'temario', 'calificaciones'] as const).map((tab) => {
-              const gradedCount = notes.filter((n) => n.grade != null).length
               const label =
                 tab === 'notas' ? 'Notas' :
                 tab === 'deadlines' ? 'Deadlines' :
@@ -340,9 +462,9 @@ function SubjectDetail() {
                       {topics.length}
                     </span>
                   )}
-                  {tab === 'calificaciones' && gradedCount > 0 && (
+                  {tab === 'calificaciones' && deadlines.filter((d) => d.grade != null).length > 0 && (
                     <span className="ml-1.5 inline-flex items-center justify-center size-4 rounded-full bg-secondary text-muted-foreground text-[9px] font-medium">
-                      {gradedCount}
+                      {deadlines.filter((d) => d.grade != null).length}
                     </span>
                   )}
                 </button>
@@ -357,6 +479,7 @@ function SubjectDetail() {
               onSelect={(note) => setView({ kind: 'note', noteId: note.id })}
               onEdit={(note) => setView({ kind: 'editor', editNote: note })}
               onDeleted={(id) => setNotes((prev) => prev.filter((n) => n.id !== id))}
+              linkedToDeadlineIds={linkedNoteIds}
             />
           )}
 
@@ -367,10 +490,12 @@ function SubjectDetail() {
               onCreated={(d) => setDeadlines((prev) => [...prev, d])}
               onUpdated={(d) => setDeadlines((prev) => prev.map((x) => (x.id === d.id ? d : x)))}
               onDeleted={(id) => setDeadlines((prev) => prev.filter((d) => d.id !== id))}
+              onViewNote={handleViewDeadlineNote}
+              onCreateNote={handleCreateDeadlineNote}
             />
           )}
 
-          {activeTab === 'calificaciones' && <GradesTab notes={notes} />}
+          {activeTab === 'calificaciones' && <GradesTab subjectId={subjectId} />}
 
           {activeTab === 'temario' && (
             <TopicList
@@ -378,6 +503,8 @@ function SubjectDetail() {
               groups={groups}
               units={units}
               topics={topics}
+              deadlines={deadlines}
+              citationsByTopic={citationsByTopic}
               onGroupCreated={(g) => setGroups((prev) => [...prev, g])}
               onGroupUpdated={(g) => setGroups((prev) => prev.map((x) => (x.id === g.id ? g : x)))}
               onGroupDeleted={(id) => {
@@ -399,6 +526,9 @@ function SubjectDetail() {
               onTopicCreated={(t) => setTopics((prev) => [...prev, t])}
               onTopicUpdated={(t) => setTopics((prev) => prev.map((x) => (x.id === t.id ? t : x)))}
               onTopicDeleted={(id) => setTopics((prev) => prev.filter((t) => t.id !== id))}
+              onCitationAdded={handleCitationAdded}
+              onCitationRemoved={handleCitationRemoved}
+              onCitationClick={handleCitationClick}
             />
           )}
         </section>
@@ -427,6 +557,7 @@ function NoteSplitLayout({
   citationCtx,
   onCiteAtPage,
   onOpenFullNote,
+  onOpenDevLabPost,
   onNoteBacklinkClick,
   onNoteBacklinkPreview,
 }: {
@@ -436,11 +567,14 @@ function NoteSplitLayout({
   citationCtx: CitationCtx | null
   onCiteAtPage: (page: number) => void
   onOpenFullNote?: (note: FacultyNote) => void
+  onOpenDevLabPost?: () => void
   onNoteBacklinkClick?: (title: string) => void
   onNoteBacklinkPreview?: (title: string) => void
 }) {
   const [currentPdfPage, setCurrentPdfPage] = useState(1)
   const pdfPanel = rightPanel?.kind === 'pdf' ? rightPanel : null
+  const notePanel = rightPanel?.kind === 'note-preview' ? rightPanel : null
+  const devlabPanel = rightPanel?.kind === 'devlab-preview' ? rightPanel : null
 
   useEffect(() => {
     if (pdfPanel) setCurrentPdfPage(pdfPanel.page)
@@ -460,7 +594,7 @@ function NoteSplitLayout({
         <div className="flex-1 h-full flex flex-col border-l border-border/60 min-w-0">
           {/* Panel header */}
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/60 bg-background/80 shrink-0 gap-2">
-            {rightPanel.kind === 'pdf' ? (
+            {pdfPanel ? (
               <>
                 <span className="text-[11px] text-muted-foreground font-medium">PDF</span>
                 <div className="flex items-center gap-2 ml-auto">
@@ -485,15 +619,15 @@ function NoteSplitLayout({
                   </button>
                 </div>
               </>
-            ) : (
+            ) : notePanel ? (
               <>
                 <span className="text-[11px] font-medium truncate max-w-[160px]">
-                  {rightPanel.note.title}
+                  {notePanel.note.title}
                 </span>
                 <div className="flex items-center gap-1.5 ml-auto shrink-0">
                   <button
                     type="button"
-                    onClick={() => onOpenFullNote?.(rightPanel.note)}
+                    onClick={() => onOpenFullNote?.(notePanel.note)}
                     className="flex items-center justify-center size-5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
                     title="Abrir nota completa"
                   >
@@ -509,26 +643,100 @@ function NoteSplitLayout({
                   </button>
                 </div>
               </>
-            )}
+            ) : devlabPanel ? (
+              <>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium shrink-0">DevLab</span>
+                  <span className="text-[11px] font-medium truncate max-w-[140px]">{devlabPanel.post.title}</span>
+                </div>
+                <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                  <button
+                    type="button"
+                    onClick={onOpenDevLabPost}
+                    className="flex items-center justify-center size-5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                    title="Ir a la nota en DevLab"
+                  >
+                    <ExternalLink className="size-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onClosePanel}
+                    className="flex items-center justify-center size-5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                    title="Cerrar panel"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              </>
+            ) : null}
           </div>
 
           {/* Panel body */}
-          {rightPanel.kind === 'pdf' ? (
+          {pdfPanel ? (
             <PdfViewer
-              storagePath={rightPanel.storagePath}
-              initialPage={rightPanel.page}
+              storagePath={pdfPanel.storagePath}
+              initialPage={pdfPanel.page}
               onPageChange={setCurrentPdfPage}
               className="flex-1 min-h-0"
             />
-          ) : (
+          ) : notePanel ? (
             <NotePreviewPanel
-              note={rightPanel.note}
+              note={notePanel.note}
               onBacklinkClick={onNoteBacklinkClick}
               onBacklinkPreview={onNoteBacklinkPreview}
             />
-          )}
+          ) : devlabPanel ? (
+            <DevLabPreviewPanel post={devlabPanel.post} />
+          ) : null}
         </div>
       )}
+    </div>
+  )
+}
+
+function DevLabPreviewPanel({ post }: { post: DevLabPost }) {
+  return (
+    <div className="flex-1 overflow-y-auto min-h-0">
+      <article className="px-6 py-8">
+        <header className="mb-8">
+          <h1 className="text-2xl font-semibold tracking-tight text-balance leading-tight">
+            {post.title}
+          </h1>
+          {post.excerpt && (
+            <p className="mt-3 text-sm text-muted-foreground leading-relaxed">{post.excerpt}</p>
+          )}
+          {post.tags.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-1.5">
+              {post.tags.map((tag) => (
+                <Badge
+                  key={tag}
+                  variant="secondary"
+                  className="rounded-md text-[10px] font-mono font-normal bg-secondary/50 border border-border/60"
+                >
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </header>
+
+        <div className="h-px bg-border/40 mb-6" />
+
+        <section className="space-y-8">
+          {post.blocks.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Sin contenido.</p>
+          ) : (
+            post.blocks.map((block) => (
+              <BlockRenderer
+                key={block.id}
+                block={block}
+                noteTitle={post.title}
+                noteId={post.id}
+              />
+            ))
+          )}
+        </section>
+      </article>
     </div>
   )
 }

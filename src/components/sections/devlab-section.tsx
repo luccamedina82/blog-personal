@@ -514,7 +514,7 @@ function PostSplitLayout({
 
 // ── Root component ────────────────────────────────────────────────────────────
 
-export function DevLabSection() {
+export function DevLabSection({ initialPostId, initialCategoryId }: { initialPostId?: string; initialCategoryId?: string } = {}) {
   const [view, setView] = useState<View>({ kind: 'categories' })
   const [categories, setCategories] = useState<DevLabCategory[]>([])
   const [posts, setPosts] = useState<DevLabPost[]>([])
@@ -594,6 +594,19 @@ export function DevLabSection() {
       .catch(() => toast.error('Failed to load posts'))
       .finally(() => setLoadingPosts(false))
   }, [view.kind === 'posts' ? view.categoryId : null])
+
+  // Auto-open post from URL search params
+  useEffect(() => {
+    if (!initialPostId || !initialCategoryId) return
+    setLoadingPosts(true)
+    listDevLabPosts(initialCategoryId)
+      .then((categoryPosts) => {
+        setPosts(categoryPosts)
+        setView({ kind: 'post', categoryId: initialCategoryId, postId: initialPostId })
+      })
+      .catch(() => {})
+      .finally(() => setLoadingPosts(false))
+  }, [initialPostId, initialCategoryId])
 
   // ── Category CRUD ──────────────────────────────────────────────────────────
 

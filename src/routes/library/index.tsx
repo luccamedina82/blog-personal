@@ -1,8 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
-import { Library, X } from 'lucide-react'
+import { Library, Link2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { listBooks, citationCountPerBook } from '@/lib/library/queries'
+import { listTopicCitationsForBook } from '@/lib/faculty/queries'
+import type { TopicCitationBacklink } from '@/lib/faculty/queries'
 import { BookGrid } from '@/components/library/book-grid'
 import { BookUploadDialog } from '@/components/library/book-upload-dialog'
 import { BookEditDialog } from '@/components/library/book-edit-dialog'
@@ -25,10 +27,16 @@ function LibraryPage() {
   const [uploadOpen, setUploadOpen] = useState(false)
   const [editing, setEditing] = useState<LibraryBook | null>(null)
   const [viewing, setViewing] = useState<LibraryBook | null>(null)
+  const [topicCitations, setTopicCitations] = useState<TopicCitationBacklink[]>([])
 
   useEffect(() => {
     load()
   }, [])
+
+  useEffect(() => {
+    if (!viewing) { setTopicCitations([]); return }
+    listTopicCitationsForBook(viewing.id).then(setTopicCitations).catch(() => {})
+  }, [viewing?.id])
 
   async function load() {
     setLoading(true)
@@ -138,6 +146,26 @@ function LibraryPage() {
               </Button>
             </div>
           </SheetHeader>
+          {topicCitations.length > 0 && (
+            <div className="px-4 py-2 border-y border-border/40 bg-secondary/10 shrink-0">
+              <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-1.5 flex items-center gap-1">
+                <Link2 className="size-3" />
+                Citado en temas
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {topicCitations.map((c) => (
+                  <span
+                    key={c.citation_id}
+                    className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-secondary rounded-full px-2 py-0.5"
+                  >
+                    <span className="font-medium text-foreground/70 max-w-[80px] truncate">{c.subject_name}</span>
+                    <span className="text-muted-foreground/50">·</span>
+                    <span className="max-w-[100px] truncate">{c.topic_title}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex-1 min-h-0 mt-3">
             {viewing && (
               <PdfViewer
