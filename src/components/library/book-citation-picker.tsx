@@ -22,9 +22,10 @@ interface Props {
   open: boolean
   onOpenChange: (v: boolean) => void
   onPick: (bookId: string, bookTitle: string, storagePath: string, page: number) => void
+  onBrowse?: (book: LibraryBook) => void
 }
 
-export function BookCitationPicker({ open, onOpenChange, onPick }: Props) {
+export function BookCitationPicker({ open, onOpenChange, onPick, onBrowse }: Props) {
   'use no memo'
   const [books, setBooks] = useState<LibraryBook[]>([])
   const [loading, setLoading] = useState(false)
@@ -160,6 +161,16 @@ export function BookCitationPicker({ open, onOpenChange, onPick }: Props) {
               <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
+              {onBrowse && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { onBrowse(selected); onOpenChange(false) }}
+                >
+                  Abrir libro
+                </Button>
+              )}
               <Button type="button" size="sm" onClick={handlePick} disabled={!page}>
                 Insertar cita
               </Button>

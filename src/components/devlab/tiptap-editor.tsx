@@ -19,7 +19,7 @@ interface TiptapEditorProps {
 
 export function TiptapEditor({ value, onChange, placeholder, className }: TiptapEditorProps) {
   const allSuggestions = useBacklinkSuggestions()
-  const { openPdf } = usePdfPanel()
+  const { openPdf, startCitationBrowse } = usePdfPanel()
   const [query, setQuery] = useState<string | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null)
@@ -152,6 +152,13 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
         editor={editor}
         className="px-3 py-3 text-sm leading-relaxed min-h-[120px]"
         onKeyDown={handleKeyDown}
+        onClick={(e) => {
+          const target = (e.target as HTMLElement).closest('[data-bc]') as HTMLElement | null
+          if (!target) return
+          const storagePath = target.dataset.storagePath ?? ''
+          const page = Number(target.dataset.page ?? 1)
+          if (storagePath) openPdf(storagePath, page)
+        }}
       />
 
       <BookCitationPicker
@@ -163,6 +170,14 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
             attrs: { bookId, bookTitle, storagePath, page },
           }).run()
           openPdf(storagePath, page)
+        }}
+        onBrowse={(book) => {
+          startCitationBrowse(book, (page) => {
+            editor.chain().focus().insertContent({
+              type: 'bookCitation',
+              attrs: { bookId: book.id, bookTitle: book.title, storagePath: book.storage_path, page },
+            }).run()
+          })
         }}
       />
 
