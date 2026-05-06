@@ -5,6 +5,7 @@ import { SaveToAnkiButton } from '@/components/english/anki/save-to-anki-button'
 import { InteractiveCodeBlock } from '@/components/interactive-code-block'
 import { supabase } from '@/lib/supabase'
 import { useState, useEffect, useRef } from 'react'
+import { usePdfPanel } from '@/lib/faculty/pdf-panel-context'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -48,6 +49,7 @@ function TextBlockView({
   onBacklinkClick?: (title: string) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
+  const { openPdf } = usePdfPanel()
   const processed = html.replace(
     /\[\[([^\]]+)\]\]/g,
     '<a class="faculty-backlink" data-bk="$1" href="#">[[$1]]</a>',
@@ -56,9 +58,9 @@ function TextBlockView({
   useEffect(() => {
     const container = ref.current
     if (!container) return
-    const links = container.querySelectorAll<HTMLAnchorElement>('.faculty-backlink')
     const cleanup: Array<() => void> = []
-    links.forEach((el) => {
+
+    container.querySelectorAll<HTMLAnchorElement>('.faculty-backlink').forEach((el) => {
       const title = el.dataset.bk ?? ''
       const fn = (e: MouseEvent) => {
         e.preventDefault()
@@ -67,8 +69,20 @@ function TextBlockView({
       el.addEventListener('click', fn)
       cleanup.push(() => el.removeEventListener('click', fn))
     })
+
+    container.querySelectorAll<HTMLSpanElement>('[data-bc]').forEach((el) => {
+      const storagePath = el.dataset.storagePath ?? ''
+      const page = Number(el.dataset.page ?? 1)
+      const fn = (e: MouseEvent) => {
+        e.preventDefault()
+        if (storagePath) openPdf(storagePath, page)
+      }
+      el.addEventListener('click', fn)
+      cleanup.push(() => el.removeEventListener('click', fn))
+    })
+
     return () => cleanup.forEach((f) => f())
-  }, [processed, onBacklinkClick])
+  }, [processed, onBacklinkClick, openPdf])
 
   return (
     <div

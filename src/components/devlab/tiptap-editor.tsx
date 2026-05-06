@@ -2,10 +2,13 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
 import Placeholder from '@tiptap/extension-placeholder'
-import { Bold, Italic, Underline as UnderlineIcon } from 'lucide-react'
+import { Bold, Italic, Underline as UnderlineIcon, BookOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useState, useCallback, useRef } from 'react'
 import { useBacklinkSuggestions } from '@/lib/faculty/backlinks-context'
+import { BookCitationExtension } from '@/lib/faculty/book-citation-extension'
+import { BookCitationPicker } from '@/components/library/book-citation-picker'
+import { usePdfPanel } from '@/lib/faculty/pdf-panel-context'
 
 interface TiptapEditorProps {
   value: string
@@ -16,9 +19,11 @@ interface TiptapEditorProps {
 
 export function TiptapEditor({ value, onChange, placeholder, className }: TiptapEditorProps) {
   const allSuggestions = useBacklinkSuggestions()
+  const { openPdf } = usePdfPanel()
   const [query, setQuery] = useState<string | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const filtered =
@@ -49,6 +54,7 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
       StarterKit.configure({ codeBlock: false }),
       Underline,
       Placeholder.configure({ placeholder: placeholder ?? 'Write your content here…' }),
+      BookCitationExtension,
     ],
     content: value,
     onUpdate({ editor: e }) {
@@ -136,12 +142,28 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
         <ToolBtn active={editor.isActive('code')} onClick={() => editor.chain().focus().toggleCode().run()} title="Inline code">
           <span className="text-[10px] font-mono leading-none">{`</>`}</span>
         </ToolBtn>
+        <div className="w-px h-4 bg-border/60 mx-1 shrink-0" />
+        <ToolBtn active={false} onClick={() => setPickerOpen(true)} title="Citar libro">
+          <BookOpen className="size-3.5" />
+        </ToolBtn>
       </div>
 
       <EditorContent
         editor={editor}
         className="px-3 py-3 text-sm leading-relaxed min-h-[120px]"
         onKeyDown={handleKeyDown}
+      />
+
+      <BookCitationPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        onPick={(bookId, bookTitle, storagePath, page) => {
+          editor.chain().focus().insertContent({
+            type: 'bookCitation',
+            attrs: { bookId, bookTitle, storagePath, page },
+          }).run()
+          openPdf(storagePath, page)
+        }}
       />
 
       {/* [[backlink]] autocomplete dropdown — anchored to cursor position */}

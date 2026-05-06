@@ -1,7 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { X } from 'lucide-react'
+import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels'
+import { PdfViewer } from '@/components/library/pdf-viewer'
+import { PdfPanelContext } from '@/lib/faculty/pdf-panel-context'
 import { FacultyShell } from '@/components/faculty/faculty-shell'
 import { NotesList } from '@/components/faculty/notes-list'
 import { NoteView } from '@/components/faculty/note-view'
@@ -47,6 +51,12 @@ function SubjectDetail() {
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<View>({ kind: 'list' })
   const [activeTab, setActiveTab] = useState<'notas' | 'deadlines' | 'temario' | 'calificaciones'>('notas')
+  const [pdfPanel, setPdfPanel] = useState<{ storagePath: string; page: number } | null>(null)
+
+  const pdfCtxValue = useMemo(
+    () => ({ openPdf: (storagePath: string, page = 1) => setPdfPanel({ storagePath, page }) }),
+    [],
+  )
 
   useEffect(() => {
     Promise.all([
@@ -71,17 +81,21 @@ function SubjectDetail() {
 
   if (loading) {
     return (
-      <FacultyShell back={{ to: '/faculty', label: 'Materias' }} title="Cargando…">
-        <p className="text-xs text-muted-foreground">Cargando…</p>
-      </FacultyShell>
+      <PdfPanelContext.Provider value={pdfCtxValue}>
+        <FacultyShell back={{ to: '/faculty', label: 'Materias' }} title="Cargando…">
+          <p className="text-xs text-muted-foreground">Cargando…</p>
+        </FacultyShell>
+      </PdfPanelContext.Provider>
     )
   }
 
   if (!subject) {
     return (
-      <FacultyShell back={{ to: '/faculty', label: 'Materias' }} title="No encontrada">
-        <p className="text-sm text-muted-foreground">Esta materia no existe.</p>
-      </FacultyShell>
+      <PdfPanelContext.Provider value={pdfCtxValue}>
+        <FacultyShell back={{ to: '/faculty', label: 'Materias' }} title="No encontrada">
+          <p className="text-sm text-muted-foreground">Esta materia no existe.</p>
+        </FacultyShell>
+      </PdfPanelContext.Provider>
     )
   }
 
@@ -96,6 +110,7 @@ function SubjectDetail() {
         await deleteFacultyNote(note!.id)
         setNotes((prev) => prev.filter((n) => n.id !== note!.id))
         setView({ kind: 'list' })
+        setPdfPanel(null)
         toast.success(`"${note!.title}" eliminada`)
       } catch {
         toast.error('Error al eliminar')
@@ -103,17 +118,21 @@ function SubjectDetail() {
     }
 
     return (
-      <NoteView
-        note={note}
-        subject={subject}
-        onBack={() => setView({ kind: 'list' })}
-        onEdit={() => setView({ kind: 'editor', editNote: note })}
-        onDelete={handleDeleteFromView}
-        onBacklinkClick={(title) => {
-          const target = notes.find((n) => n.title === title)
-          if (target) setView({ kind: 'note', noteId: target.id })
-        }}
-      />
+      <PdfPanelContext.Provider value={pdfCtxValue}>
+        <NoteSplitLayout pdfPanel={pdfPanel} onClosePdf={() => setPdfPanel(null)}>
+          <NoteView
+            note={note}
+            subject={subject}
+            onBack={() => { setView({ kind: 'list' }); setPdfPanel(null) }}
+            onEdit={() => setView({ kind: 'editor', editNote: note })}
+            onDelete={handleDeleteFromView}
+            onBacklinkClick={(title) => {
+              const target = notes.find((n) => n.title === title)
+              if (target) setView({ kind: 'note', noteId: target.id })
+            }}
+          />
+        </NoteSplitLayout>
+      </PdfPanelContext.Provider>
     )
   }
 
@@ -121,22 +140,27 @@ function SubjectDetail() {
 
   if (view.kind === 'editor') {
     return (
-      <FacultyNoteEditor
-        subject={subject}
-        topics={topics}
-        groups={groups}
-        units={units}
-        initial={view.editNote}
-        onSaved={(saved) => {
-          setNotes((prev) => {
-            const exists = prev.find((n) => n.id === saved.id)
-            if (exists) return prev.map((n) => (n.id === saved.id ? saved : n))
-            return [saved, ...prev]
-          })
-          setView({ kind: 'list' })
-        }}
-        onCancel={() => setView({ kind: 'list' })}
-      />
+      <PdfPanelContext.Provider value={pdfCtxValue}>
+        <NoteSplitLayout pdfPanel={pdfPanel} onClosePdf={() => setPdfPanel(null)}>
+          <FacultyNoteEditor
+            subject={subject}
+            topics={topics}
+            groups={groups}
+            units={units}
+            initial={view.editNote}
+            onSaved={(saved) => {
+              setNotes((prev) => {
+                const exists = prev.find((n) => n.id === saved.id)
+                if (exists) return prev.map((n) => (n.id === saved.id ? saved : n))
+                return [saved, ...prev]
+              })
+              setView({ kind: 'list' })
+              setPdfPanel(null)
+            }}
+            onCancel={() => { setView({ kind: 'list' }); setPdfPanel(null) }}
+          />
+        </NoteSplitLayout>
+      </PdfPanelContext.Provider>
     )
   }
 
@@ -258,6 +282,50 @@ function SubjectDetail() {
         </aside>
       </div>
     </FacultyShell>
+  )
+}
+
+// ── Split layout helper ───────────────────────────────────────────────────────
+
+function NoteSplitLayout({
+  children,
+  pdfPanel,
+  onClosePdf,
+}: {
+  children: React.ReactNode
+  pdfPanel: { storagePath: string; page: number } | null
+  onClosePdf: () => void
+}) {
+  if (!pdfPanel) return <>{children}</>
+  return (
+    <div className="flex overflow-hidden" style={{ height: '100dvh' }}>
+      <PanelGroup direction="horizontal">
+        <Panel defaultSize={55} minSize={30}>
+          <div className="h-full overflow-y-auto">{children}</div>
+        </Panel>
+        <PanelResizeHandle className="w-px bg-border/50 hover:bg-primary/40 transition-colors data-[resize-handle-active]:bg-primary/60 cursor-col-resize" />
+        <Panel defaultSize={45} minSize={20}>
+          <div className="h-full flex flex-col border-l border-border/60">
+            <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/60 bg-background/80 shrink-0">
+              <span className="text-[11px] text-muted-foreground font-medium">PDF</span>
+              <button
+                type="button"
+                onClick={onClosePdf}
+                className="flex items-center justify-center size-5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                title="Cerrar PDF"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+            <PdfViewer
+              storagePath={pdfPanel.storagePath}
+              initialPage={pdfPanel.page}
+              className="flex-1 min-h-0"
+            />
+          </div>
+        </Panel>
+      </PanelGroup>
+    </div>
   )
 }
 

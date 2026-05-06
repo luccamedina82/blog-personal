@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
 import { DevLabPostEditor } from '@/components/devlab-post-editor'
 import { createFacultyNote, updateFacultyNote, listAllNotesSummary } from '@/lib/faculty/queries'
+import { replaceCitationsForNote } from '@/lib/library/queries'
 import { BacklinkSuggestionsContext } from '@/lib/faculty/backlinks-context'
 import type {
   FacultyNote,
@@ -12,7 +13,7 @@ import type {
   FacultyTopicGroup,
   FacultyTopicUnit,
 } from '@/lib/faculty/types'
-import type { DevLabPost } from '@/lib/devlab/types'
+import type { DevLabPost, DevLabBlock } from '@/lib/devlab/types'
 import type { PostDraft } from '@/components/devlab-post-editor'
 
 const KIND_OPTIONS: Array<{ value: FacultyNoteKind; label: string }> = [
@@ -83,6 +84,23 @@ export function FacultyNoteEditor({
       }
     : undefined
 
+  function syncCitations(noteId: string, blocks: DevLabBlock[]) {
+    const citations: { book_id: string; page: number }[] = []
+    const parser = new DOMParser()
+    for (const block of blocks) {
+      if (block.kind !== 'text') continue
+      const doc = parser.parseFromString(block.html, 'text/html')
+      doc.querySelectorAll<HTMLElement>('[data-bc]').forEach((el) => {
+        const bookId = el.dataset.bookId
+        const page = Number(el.dataset.page ?? 1)
+        if (bookId) citations.push({ book_id: bookId, page })
+      })
+    }
+    replaceCitationsForNote('faculty_note', noteId, citations).catch((err) => {
+      console.error('[citations] sync error:', err)
+    })
+  }
+
   async function handleSave(draft: PostDraft) {
     const payload = {
       subject_id: subject.id,
@@ -96,15 +114,19 @@ export function FacultyNoteEditor({
     }
 
     try {
+      let noteId: string
       if (isEdit && initial) {
         await updateFacultyNote(initial.id, payload)
+        noteId = initial.id
         onSaved({ ...initial, ...payload })
         toast.success('Nota actualizada')
       } else {
         const created = await createFacultyNote(payload)
+        noteId = created.id
         onSaved(created)
         toast.success('Nota creada')
       }
+      syncCitations(noteId, draft.blocks)
     } catch {
       toast.error(isEdit ? 'Error al actualizar' : 'Error al crear')
       throw new Error('save failed')

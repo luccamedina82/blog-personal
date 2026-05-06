@@ -208,3 +208,5 @@
 .tiptap-render blockquote { border-left: 2px solid oklch(var(--primary) / 0.5); padding-left: 1em; color: oklch(0.72 0.01 240); font-style: italic; }
 .faculty-backlink { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: oklch(from var(--primary) l c h / 0.4); cursor: pointer; font-size: inherit; }
 .faculty-backlink:hover { text-decoration-color: var(--primary); }
+.book-citation-chip { display: inline-flex; align-items: center; padding: 0.08em 0.45em; border-radius: 4px; background: oklch(0.78 0.09 215 / 0.12); border: 1px solid oklch(0.78 0.09 215 / 0.3); color: oklch(0.78 0.09 215); font-size: 0.82em; font-weight: 500; white-space: nowrap; cursor: pointer; transition: background 0.15s, border-color 0.15s; user-select: none; }
+.book-citation-chip:hover { background: oklch(0.78 0.09 215 / 0.2); border-color: oklch(0.78 0.09 215 / 0.5); }
