@@ -91,16 +91,15 @@ function BacklinkPopover({
         <ArrowUpRight className="size-3.5 text-muted-foreground shrink-0" />
         Ir a la nota
       </button>
-      {onPreview && (
-        <button
-          type="button"
-          onClick={onPreview}
-          className="w-full flex items-center gap-2 px-2.5 py-1.5 text-sm text-left hover:bg-accent transition-colors"
-        >
-          <Eye className="size-3.5 text-muted-foreground shrink-0" />
-          Preview lateral
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() => onPreview?.()}
+        className="w-full flex items-center gap-2 px-2.5 py-1.5 text-sm text-left hover:bg-accent transition-colors disabled:opacity-40"
+        disabled={!onPreview}
+      >
+        <Eye className="size-3.5 text-muted-foreground shrink-0" />
+        Preview lateral
+      </button>
     </div>,
     document.body,
   )

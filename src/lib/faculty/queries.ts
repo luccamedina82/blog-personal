@@ -397,14 +397,23 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 // ── Backlinks ──────────────────────────────────────────────────────────────
 
 export async function listAllNotesSummary(): Promise<
-  Array<{ id: string; title: string; subject_id: string; kind: FacultyNote['kind'] }>
+  Array<{ id: string; title: string; subject_id: string; kind: FacultyNote['kind']; subject_name: string }>
 > {
   const { data, error } = await supabase
     .from('faculty_notes')
-    .select('id, title, subject_id, kind')
+    .select('id, title, subject_id, kind, faculty_subjects(name)')
     .order('created_at', { ascending: false })
   if (error) throw error
-  return data as Array<{ id: string; title: string; subject_id: string; kind: FacultyNote['kind'] }>
+  return (data as unknown as Array<{
+    id: string; title: string; subject_id: string; kind: string
+    faculty_subjects: Array<{ name: string }> | null
+  }>).map((n) => ({
+    id: n.id,
+    title: n.title,
+    subject_id: n.subject_id,
+    kind: n.kind as FacultyNote['kind'],
+    subject_name: n.faculty_subjects?.[0]?.name ?? '',
+  }))
 }
 
 export async function listNotesReferencingTitle(

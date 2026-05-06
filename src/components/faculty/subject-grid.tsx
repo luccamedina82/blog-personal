@@ -112,6 +112,7 @@ export function SubjectGrid({ subjects, topicsProgress, onNew, onEdit, onDeleted
               <Link
                 to="/faculty/$subjectId"
                 params={{ subjectId: s.id }}
+                search={{ note: undefined }}
                 className="absolute inset-0 rounded-lg"
                 aria-label={s.name}
               />

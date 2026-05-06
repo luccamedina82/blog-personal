@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import React, { useEffect, useState, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -14,11 +14,13 @@ import { TopicList } from '@/components/faculty/topic-list'
 import { GradesTab } from '@/components/faculty/grades-tab'
 import {
   getFacultySubject,
+  getFacultyNote,
   listFacultyNotes,
   listFacultyDeadlines,
   listFacultyTopics,
   listFacultyTopicGroups,
   listFacultyTopicUnits,
+  listAllNotesSummary,
   deleteFacultyNote,
 } from '@/lib/faculty/queries'
 import type {
@@ -31,6 +33,9 @@ import type {
 } from '@/lib/faculty/types'
 
 export const Route = createFileRoute('/faculty/$subjectId')({
+  validateSearch: (search: Record<string, unknown>) => ({
+    note: typeof search.note === 'string' ? search.note : undefined,
+  }),
   component: SubjectDetail,
 })
 
@@ -50,14 +55,21 @@ type RightPanel =
   | { kind: 'pdf'; storagePath: string; page: number }
   | { kind: 'note-preview'; note: FacultyNote }
 
+// title → { id, subject_id } for cross-subject navigation
+type NoteIndex = Map<string, { id: string; subject_id: string }>
+
 function SubjectDetail() {
   const { subjectId } = Route.useParams()
+  const search = Route.useSearch()
+  const navigate = useNavigate({ from: '/faculty/$subjectId' })
+
   const [subject, setSubject] = useState<FacultySubject | null>(null)
   const [notes, setNotes] = useState<FacultyNote[]>([])
   const [deadlines, setDeadlines] = useState<FacultyDeadline[]>([])
   const [topics, setTopics] = useState<FacultyTopic[]>([])
   const [groups, setGroups] = useState<FacultyTopicGroup[]>([])
   const [units, setUnits] = useState<FacultyTopicUnit[]>([])
+  const [noteIndex, setNoteIndex] = useState<NoteIndex>(new Map())
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<View>({ kind: 'list' })
   const [activeTab, setActiveTab] = useState<'notas' | 'deadlines' | 'temario' | 'calificaciones'>('notas')
@@ -93,25 +105,61 @@ function SubjectDetail() {
   }
 
   function handleBacklinkNavigate(title: string) {
-    const target = notes.find((n) => n.title === title)
-    if (!target) return
-    setView({ kind: 'note', noteId: target.id })
-    // Close note-preview if open (avoid duplicate display), keep PDF open
-    setRightPanel((prev) => (prev?.kind === 'note-preview' ? null : prev))
+    // Same-subject note
+    const local = notes.find((n) => n.title === title)
+    if (local) {
+      setView({ kind: 'note', noteId: local.id })
+      setRightPanel((prev) => (prev?.kind === 'note-preview' ? null : prev))
+      return
+    }
+    // Cross-subject: navigate to that subject's page, passing noteId as search param
+    const cross = noteIndex.get(title)
+    if (cross) {
+      navigate({
+        to: '/faculty/$subjectId',
+        params: { subjectId: cross.subject_id },
+        search: { note: cross.id },
+      })
+    } else {
+      toast.error(`Nota "${title}" no encontrada`)
+    }
   }
 
-  function handleBacklinkPreview(title: string) {
-    const target = notes.find((n) => n.title === title)
-    if (!target) return
-    // Opening preview exits any active citation-browse flow
-    setCitationCtx(null)
-    insertFnRef.current = null
-    setRightPanel({ kind: 'note-preview', note: target })
+  async function handleBacklinkPreview(title: string) {
+    // Same-subject note
+    const local = notes.find((n) => n.title === title)
+    if (local) {
+      setCitationCtx(null)
+      insertFnRef.current = null
+      setRightPanel({ kind: 'note-preview', note: local })
+      return
+    }
+    // Cross-subject: fetch full note from DB
+    const cross = noteIndex.get(title)
+    if (!cross) { toast.error(`Nota "${title}" no encontrada`); return }
+    try {
+      const note = await getFacultyNote(cross.id)
+      setCitationCtx(null)
+      insertFnRef.current = null
+      setRightPanel({ kind: 'note-preview', note })
+    } catch {
+      toast.error('Error al cargar nota')
+    }
   }
 
   function handleOpenFullNote(note: FacultyNote) {
-    setView({ kind: 'note', noteId: note.id })
-    setRightPanel(null)
+    if (note.subject_id === subjectId) {
+      // Same subject: open via state
+      setView({ kind: 'note', noteId: note.id })
+      setRightPanel(null)
+    } else {
+      // Cross-subject: navigate
+      navigate({
+        to: '/faculty/$subjectId',
+        params: { subjectId: note.subject_id },
+        search: { note: note.id },
+      })
+    }
   }
 
   useEffect(() => {
@@ -122,18 +170,31 @@ function SubjectDetail() {
       listFacultyTopics(subjectId),
       listFacultyTopicGroups(subjectId),
       listFacultyTopicUnits(subjectId),
+      listAllNotesSummary(),
     ])
-      .then(([s, n, d, t, g, u]) => {
+      .then(([s, n, d, t, g, u, allNotes]) => {
         setSubject(s)
         setNotes(n)
         setDeadlines(d)
         setTopics(t)
         setGroups(g)
         setUnits(u)
+        setNoteIndex(new Map(allNotes.map((an) => [an.title, { id: an.id, subject_id: an.subject_id }])))
       })
       .catch(() => toast.error('Error al cargar materia'))
       .finally(() => setLoading(false))
   }, [subjectId])
+
+  // Auto-open note from search param (cross-subject navigation target)
+  useEffect(() => {
+    if (!search.note || notes.length === 0) return
+    const target = notes.find((n) => n.id === search.note)
+    if (target) {
+      setView({ kind: 'note', noteId: target.id })
+      // Remove search param from URL without adding to history
+      navigate({ to: '/faculty/$subjectId', params: { subjectId }, search: { note: undefined }, replace: true })
+    }
+  }, [search.note, notes])
 
   if (loading) {
     return (

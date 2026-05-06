@@ -55,7 +55,7 @@ export function FacultyNoteEditor({
         setSuggestions(
           rows
             .filter((n) => !initial || n.id !== initial.id)
-            .map((n) => ({ id: n.id, title: n.title, hint: n.kind })),
+            .map((n) => ({ id: n.id, title: n.title, hint: n.subject_name || n.kind })),
         ),
       )
       .catch(() => {})
