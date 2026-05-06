@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import React from 'react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,17 +12,29 @@ import { InteractiveCodeBlock } from '@/components/interactive-code-block'
 import { DevLabPostEditor } from '@/components/devlab-post-editor'
 import { CategoryForm } from '@/components/devlab/category-form'
 import { getDevLabIcon } from '@/components/devlab/icon-map'
+import { PdfViewer } from '@/components/library/pdf-viewer'
+import { PdfPanelContext, usePdfPanel } from '@/lib/faculty/pdf-panel-context'
 import { supabase } from '@/lib/supabase'
+import { replaceCitationsForNote } from '@/lib/library/queries'
 import { toast } from 'sonner'
 import {
   ArrowLeft, Clock, CalendarDays, ChevronRight, BookOpen,
-  Plus, Pencil, Trash2, Loader2,
+  Plus, Pencil, Trash2, Loader2, Bookmark, X,
 } from 'lucide-react'
 import {
   listDevLabCategories, createDevLabCategory, updateDevLabCategory, deleteDevLabCategory,
   listDevLabPosts, createDevLabPost, updateDevLabPost, deleteDevLabPost,
 } from '@/lib/devlab/queries'
 import type { DevLabCategory, DevLabPost, DevLabBlock, PostDraft } from '@/lib/devlab/types'
+
+// ── Citation context types ────────────────────────────────────────────────────
+
+type CitationCtx = {
+  bookId: string
+  bookTitle: string
+  storagePath: string
+  insertFn: (page: number) => void
+}
 
 // ── View state ────────────────────────────────────────────────────────────────
 
@@ -383,11 +396,20 @@ function PostView({
 }
 
 function BlockRenderer({ block }: { block: DevLabBlock }) {
+  const { openPdf } = usePdfPanel()
+
   if (block.kind === 'text') {
     return (
       <div
         className="tiptap-render max-w-2xl"
         dangerouslySetInnerHTML={{ __html: block.html }}
+        onClick={(e) => {
+          const target = (e.target as HTMLElement).closest('[data-bc]') as HTMLElement | null
+          if (!target) return
+          const storagePath = target.dataset.storagePath ?? ''
+          const page = Number(target.dataset.page ?? 1)
+          if (storagePath) openPdf(storagePath, page)
+        }}
       />
     )
   }
@@ -423,6 +445,73 @@ function BlockRenderer({ block }: { block: DevLabBlock }) {
   return null
 }
 
+// ── Split layout ──────────────────────────────────────────────────────────────
+
+function PostSplitLayout({
+  children,
+  pdfPanel,
+  onClosePdf,
+  citationCtx,
+  onCiteAtPage,
+}: {
+  children: React.ReactNode
+  pdfPanel: { storagePath: string; page: number } | null
+  onClosePdf: () => void
+  citationCtx: CitationCtx | null
+  onCiteAtPage: (page: number) => void
+}) {
+  const [currentPdfPage, setCurrentPdfPage] = useState(1)
+
+  useEffect(() => {
+    if (pdfPanel) setCurrentPdfPage(pdfPanel.page)
+  }, [pdfPanel?.storagePath, pdfPanel?.page])
+
+  return (
+    <div className="flex overflow-hidden" style={{ height: '100dvh' }}>
+      <div
+        className="h-full overflow-y-auto shrink-0"
+        style={{ width: pdfPanel ? '55%' : '100%' }}
+      >
+        {children}
+      </div>
+      {pdfPanel && (
+        <div className="flex-1 h-full flex flex-col border-l border-border/60 min-w-0">
+          <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/60 bg-background/80 shrink-0 gap-2">
+            <span className="text-[11px] text-muted-foreground font-medium">PDF</span>
+            <div className="flex items-center gap-2 ml-auto">
+              {citationCtx && (
+                <button
+                  type="button"
+                  onClick={() => onCiteAtPage(currentPdfPage)}
+                  className="flex items-center gap-1 h-6 px-2 rounded text-[11px] bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-medium"
+                  title="Insertar cita en el post"
+                >
+                  <Bookmark className="size-3" />
+                  Citar pág. {currentPdfPage}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onClosePdf}
+                className="flex items-center justify-center size-5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                title="Cerrar PDF"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          </div>
+          <PdfViewer
+            storagePath={pdfPanel.storagePath}
+            initialPage={pdfPanel.page}
+            onPageChange={setCurrentPdfPage}
+            className="flex-1 min-h-0"
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Root component ────────────────────────────────────────────────────────────
 
 export function DevLabSection() {
@@ -434,6 +523,52 @@ export function DevLabSection() {
   const [loadingPosts, setLoadingPosts] = useState(false)
   const [catFormOpen, setCatFormOpen] = useState(false)
   const [editingCat, setEditingCat] = useState<DevLabCategory | null>(null)
+  const [pdfPanel, setPdfPanel] = useState<{ storagePath: string; page: number } | null>(null)
+  const [citationCtx, setCitationCtx] = useState<CitationCtx | null>(null)
+  const insertFnRef = useRef<((page: number) => void) | null>(null)
+
+  const pdfCtxValue = useMemo(
+    () => ({
+      openPdf: (storagePath: string, page = 1) => setPdfPanel({ storagePath, page }),
+      startCitationBrowse: (
+        book: { id: string; title: string; storage_path: string },
+        insertFn: (page: number) => void,
+      ) => {
+        insertFnRef.current = insertFn
+        setCitationCtx({ bookId: book.id, bookTitle: book.title, storagePath: book.storage_path, insertFn })
+        setPdfPanel({ storagePath: book.storage_path, page: 1 })
+      },
+    }),
+    [],
+  )
+
+  function closePdfAndCitation() {
+    setPdfPanel(null)
+    setCitationCtx(null)
+    insertFnRef.current = null
+  }
+
+  function handleCiteAtPage(page: number) {
+    citationCtx?.insertFn(page)
+    toast.success(`Cita insertada — pág. ${page}`)
+  }
+
+  function syncCitations(postId: string, blocks: DevLabBlock[]) {
+    const citations: { book_id: string; page: number }[] = []
+    const parser = new DOMParser()
+    for (const block of blocks) {
+      if (block.kind !== 'text') continue
+      const doc = parser.parseFromString(block.html, 'text/html')
+      doc.querySelectorAll<HTMLElement>('[data-bc]').forEach((el) => {
+        const bookId = el.dataset.bookId
+        const page = Number(el.dataset.page ?? 1)
+        if (bookId) citations.push({ book_id: bookId, page })
+      })
+    }
+    replaceCitationsForNote('devlab_post', postId, citations).catch((err) => {
+      console.error('[citations] sync error:', err)
+    })
+  }
 
   // Load categories on mount
   useEffect(() => {
@@ -524,15 +659,19 @@ export function DevLabSection() {
       // Update
       await updateDevLabPost(view.editPost.id, payload)
       setPosts((prev) => prev.map((p) => p.id === view.editPost!.id ? { ...p, ...payload } : p))
+      syncCitations(view.editPost.id, draft.blocks)
       toast.success('Post updated')
       setView({ kind: 'posts', categoryId: categoryId! })
+      closePdfAndCitation()
     } else {
       // Create
       const post = await createDevLabPost(payload)
       setPosts((prev) => [post, ...prev])
       setPostCounts((prev) => ({ ...prev, [categoryId!]: (prev[categoryId!] ?? 0) + 1 }))
+      syncCitations(post.id, draft.blocks)
       toast.success('Post published')
       setView({ kind: 'posts', categoryId: categoryId! })
+      closePdfAndCitation()
     }
   }
 
@@ -543,7 +682,7 @@ export function DevLabSection() {
       const catId = view.kind === 'post' ? view.categoryId : (view.kind === 'posts' ? view.categoryId : null)
       if (catId) setPostCounts((prev) => ({ ...prev, [catId]: Math.max(0, (prev[catId] ?? 1) - 1) }))
       toast.success('Post deleted')
-      if (view.kind === 'post') setView({ kind: 'posts', categoryId: view.categoryId })
+      if (view.kind === 'post') { setView({ kind: 'posts', categoryId: view.categoryId }); closePdfAndCitation() }
     } catch {
       toast.error('Failed to delete post')
     }
@@ -600,23 +739,41 @@ export function DevLabSection() {
       )}
 
       {!loadingCats && view.kind === 'post' && catForView && postForView && (
-        <PostView
-          category={catForView}
-          post={postForView}
-          onBack={() => setView({ kind: 'posts', categoryId: view.categoryId })}
-          onEdit={() => setView({ kind: 'editor', categoryId: view.categoryId, editPost: postForView })}
-          onDelete={() => handleDeletePost(postForView)}
-        />
+        <PdfPanelContext.Provider value={pdfCtxValue}>
+          <PostSplitLayout
+            pdfPanel={pdfPanel}
+            onClosePdf={closePdfAndCitation}
+            citationCtx={citationCtx}
+            onCiteAtPage={handleCiteAtPage}
+          >
+            <PostView
+              category={catForView}
+              post={postForView}
+              onBack={() => { setView({ kind: 'posts', categoryId: view.categoryId }); closePdfAndCitation() }}
+              onEdit={() => setView({ kind: 'editor', categoryId: view.categoryId, editPost: postForView })}
+              onDelete={() => handleDeletePost(postForView)}
+            />
+          </PostSplitLayout>
+        </PdfPanelContext.Provider>
       )}
 
       {!loadingCats && view.kind === 'editor' && catForView && (
-        <DevLabPostEditor
-          categoryLabel={catForView.label}
-          categoryId={view.categoryId}
-          initial={view.editPost}
-          onSave={handleSavePost}
-          onCancel={() => setView({ kind: 'posts', categoryId: view.categoryId })}
-        />
+        <PdfPanelContext.Provider value={pdfCtxValue}>
+          <PostSplitLayout
+            pdfPanel={pdfPanel}
+            onClosePdf={closePdfAndCitation}
+            citationCtx={citationCtx}
+            onCiteAtPage={handleCiteAtPage}
+          >
+            <DevLabPostEditor
+              categoryLabel={catForView.label}
+              categoryId={view.categoryId}
+              initial={view.editPost}
+              onSave={handleSavePost}
+              onCancel={() => { setView({ kind: 'posts', categoryId: view.categoryId }); closePdfAndCitation() }}
+            />
+          </PostSplitLayout>
+        </PdfPanelContext.Provider>
       )}
 
       {/* Always mounted — never remounts when view changes, Dialog opens reliably */}

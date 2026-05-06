@@ -974,11 +974,11 @@ export type BookCitation = {
   - Botón X cierra panel; navegar a lista = cierra panel
 - [x] Cleanup cubierto por replace strategy (al guardar nota, todas las citas se resincronizan desde el doc)
 
-#### 10e — Citas de libros en notas DevLab
-- [ ] Reusar extension Tiptap `BookCitation` y `BookCitationPicker`
-- [ ] Toolbar button en `DevLabPostEditor`
-- [ ] `source_kind='devlab_post'` en sync hook
-- [ ] Vista split en `PostView` DevLab — mismo patrón que faculty (compartir layout component `SplitView`)
+#### 10e — Citas de libros en notas DevLab ✓ (2026-05-06)
+- [x] Reusar extension Tiptap `BookCitation` y `BookCitationPicker` (ya en TiptapEditor, sin cambios)
+- [x] Toolbar button `BookOpen` en `TiptapEditor` — ya existía, se activa con contexto correcto
+- [x] `source_kind='devlab_post'` en sync hook — `syncCitations` en `DevLabSection.handleSavePost`
+- [x] Vista split en `PostView` DevLab — `PostSplitLayout` en `devlab-section.tsx`, mismo patrón que faculty
 
 #### 10f — Backlinks preview UX (refactor de Fase 9c)
 - [ ] Modificar renderer de `[[nota]]` en `NoteView` (faculty + devlab si aplica): click no redirige inmediato
@@ -1190,7 +1190,7 @@ VITE_SUPABASE_ANON_KEY
 ---
 
 **Última actualización:** 2026-05-06
-**Estado:** Fases 0–7 COMPLETAS. Fase 8 (Faculty MVP) COMPLETA. Fase 9a/9a.5/9b/9c COMPLETAS. Pendiente: 9d (Export PDF apunte). Fase 10a/10b/10c/10d COMPLETAS. Pendiente: 10e (citas en DevLab), 10f (backlinks preview UX), 10g (cross-link english ↔ biblioteca). Siguiente: 10e o 10f.
+**Estado:** Fases 0–7 COMPLETAS. Fase 8 (Faculty MVP) COMPLETA. Fase 9a/9a.5/9b/9c COMPLETAS. Pendiente: 9d (Export PDF apunte). Fase 10a/10b/10c/10d/10e COMPLETAS. Pendiente: 10f (backlinks preview UX), 10g (cross-link english ↔ biblioteca). Siguiente: 10f o 10g.
 
 
 
