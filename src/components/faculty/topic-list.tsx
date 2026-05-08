@@ -21,11 +21,6 @@ import type {
   FacultyTopicCitation, FacultyTopicCitationKind, FacultyDeadline,
 } from '@/lib/faculty/types'
 
-const STATUS_OPTIONS: Array<{ value: FacultyTopicStatus; label: string }> = [
-  { value: 'pendiente', label: 'Pendiente' },
-  { value: 'visto', label: 'Visto' },
-  { value: 'dominado', label: 'Dominado' },
-]
 
 const CITATION_ICON: Record<FacultyTopicCitationKind, React.ElementType> = {
   faculty_note: FileText,
@@ -281,21 +276,6 @@ export function TopicList({
     }
   }
 
-  async function moveTopic(list: FacultyTopic[], idx: number, dir: -1 | 1) {
-    const a = list[idx]
-    const b = list[idx + dir]
-    if (!b) return
-    try {
-      await Promise.all([
-        updateFacultyTopic(a.id, { order_index: b.order_index }),
-        updateFacultyTopic(b.id, { order_index: a.order_index }),
-      ])
-      onTopicUpdated({ ...a, order_index: b.order_index })
-      onTopicUpdated({ ...b, order_index: a.order_index })
-    } catch {
-      toast.error('Error al reordenar')
-    }
-  }
 
   async function handleDeleteGroup(g: FacultyTopicGroup) {
     try {
