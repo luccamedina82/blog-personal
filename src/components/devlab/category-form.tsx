@@ -1,9 +1,20 @@
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { DEVLAB_ICON_NAMES, DEVLAB_ICON_MAP, getDevLabIcon } from './icon-map'
 import { cn } from '@/lib/utils'
 import type { DevLabCategory } from '@/lib/devlab/types'
+
+const schema = z.object({
+  label: z.string().min(1, 'Required'),
+  description: z.string(),
+  icon: z.string().min(1),
+})
+
+type FormValues = z.infer<typeof schema>
 
 export type CategoryPayload = {
   slug: string
@@ -19,38 +30,35 @@ interface CategoryFormProps {
   onSubmit: (payload: CategoryPayload) => Promise<void>
 }
 
+function slugify(text: string) {
+  return text.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+}
+
 export function CategoryForm({ open, onOpenChange, initial, onSubmit }: CategoryFormProps) {
-  const [label, setLabel] = useState('')
-  const [description, setDescription] = useState('')
-  const [icon, setIcon] = useState('Cpu')
-  const [loading, setLoading] = useState(false)
+  const { register, handleSubmit, watch, setValue, reset, formState: { isSubmitting, isValid } } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { label: '', description: '', icon: 'Cpu' },
+  })
+
+  const icon = watch('icon')
 
   useEffect(() => {
     if (!open) return
-    setLabel(initial?.label ?? '')
-    setDescription(initial?.description ?? '')
-    setIcon(initial?.icon ?? 'Cpu')
+    reset({
+      label: initial?.label ?? '',
+      description: initial?.description ?? '',
+      icon: initial?.icon ?? 'Cpu',
+    })
   }, [open, initial?.id])
 
-  function slugify(text: string) {
-    return text.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!label.trim()) return
-    setLoading(true)
-    try {
-      await onSubmit({
-        slug: slugify(label),
-        label: label.trim(),
-        description: description.trim(),
-        icon,
-      })
-      onOpenChange(false)
-    } finally {
-      setLoading(false)
-    }
+  async function onValid(values: FormValues) {
+    await onSubmit({
+      slug: slugify(values.label),
+      label: values.label.trim(),
+      description: values.description.trim(),
+      icon: values.icon,
+    })
+    onOpenChange(false)
   }
 
   return (
@@ -59,15 +67,13 @@ export function CategoryForm({ open, onOpenChange, initial, onSubmit }: Category
         <DialogHeader>
           <DialogTitle>{initial ? 'Edit category' : 'New category'}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+        <form onSubmit={handleSubmit(onValid)} className="space-y-4 pt-1">
           <div className="space-y-1.5">
             <label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
               Label
             </label>
             <input
-              type="text"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
+              {...register('label')}
               placeholder="e.g. Compilers"
               autoFocus
               className="w-full h-9 rounded-md border border-border/60 bg-background/40 px-3 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 transition-colors"
@@ -79,9 +85,7 @@ export function CategoryForm({ open, onOpenChange, initial, onSubmit }: Category
               Description
             </label>
             <input
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              {...register('description')}
               placeholder="Short description"
               className="w-full h-9 rounded-md border border-border/60 bg-background/40 px-3 text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 transition-colors"
             />
@@ -99,7 +103,7 @@ export function CategoryForm({ open, onOpenChange, initial, onSubmit }: Category
                     key={name}
                     type="button"
                     title={name}
-                    onClick={() => setIcon(name)}
+                    onClick={() => setValue('icon', name)}
                     className={cn(
                       'flex items-center justify-center size-8 rounded-md border transition-colors',
                       icon === name
@@ -119,7 +123,7 @@ export function CategoryForm({ open, onOpenChange, initial, onSubmit }: Category
             <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" size="sm" disabled={loading || !label.trim()}>
+            <Button type="submit" size="sm" disabled={isSubmitting || !isValid}>
               {initial ? 'Save changes' : 'Create'}
             </Button>
           </div>

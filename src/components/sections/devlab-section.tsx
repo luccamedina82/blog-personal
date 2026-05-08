@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import React from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -8,26 +9,32 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { InteractiveCodeBlock } from '@/components/interactive-code-block'
 import { DevLabPostEditor } from '@/components/devlab-post-editor'
 import { CategoryForm } from '@/components/devlab/category-form'
 import { getDevLabIcon } from '@/components/devlab/icon-map'
 import { PdfViewer } from '@/components/library/pdf-viewer'
-import { PdfPanelContext, usePdfPanel } from '@/lib/faculty/pdf-panel-context'
-import { supabase } from '@/lib/supabase'
+import { PdfPanelContext } from '@/lib/shared/pdf-panel-context'
+import { BacklinkSuggestionsContext } from '@/lib/shared/backlinks-context'
+import { BacklinkActionsContext } from '@/lib/shared/backlink-actions-context'
+import { BlockRenderer, NotePreviewPanel } from '@/components/faculty/note-view'
 import { replaceCitationsForNote } from '@/lib/library/queries'
+import {
+  listAllNotesSummary, getFacultyNote,
+} from '@/lib/faculty/queries'
 import { toast } from 'sonner'
 import {
   ArrowLeft, Clock, CalendarDays, ChevronRight, BookOpen,
-  Plus, Pencil, Trash2, Loader2, Bookmark, X,
+  Plus, Pencil, Trash2, Loader2, Bookmark, X, ExternalLink,
 } from 'lucide-react'
 import {
   listDevLabCategories, createDevLabCategory, updateDevLabCategory, deleteDevLabCategory,
   listDevLabPosts, createDevLabPost, updateDevLabPost, deleteDevLabPost,
+  getDevLabPost, listAllDevLabPostsSummary,
 } from '@/lib/devlab/queries'
 import type { DevLabCategory, DevLabPost, DevLabBlock, PostDraft } from '@/lib/devlab/types'
+import type { FacultyNote } from '@/lib/faculty/types'
 
-// ── Citation context types ────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 type CitationCtx = {
   bookId: string
@@ -36,6 +43,16 @@ type CitationCtx = {
   insertFn: (page: number) => void
 }
 
+type RightPanel =
+  | { kind: 'pdf'; storagePath: string; page: number }
+  | { kind: 'note-preview'; note: FacultyNote }
+  | { kind: 'devlab-preview'; post: DevLabPost }
+
+type NoteIndexEntry =
+  | { id: string; type: 'faculty'; subject_id: string }
+  | { id: string; type: 'devlab'; category_id: string | null }
+type NoteIndex = Map<string, NoteIndexEntry>
+
 // ── View state ────────────────────────────────────────────────────────────────
 
 type View =
@@ -43,18 +60,6 @@ type View =
   | { kind: 'posts'; categoryId: string }
   | { kind: 'post'; categoryId: string; postId: string }
   | { kind: 'editor'; categoryId: string; editPost?: DevLabPost }
-
-// ── Signed image (resolves storage path → URL on mount) ───────────────────────
-
-function SignedImage({ path, alt }: { path: string; alt: string }) {
-  const [url, setUrl] = useState<string | null>(null)
-  useEffect(() => {
-    supabase.storage.from('media').createSignedUrl(path, 3600)
-      .then(({ data }) => setUrl(data?.signedUrl ?? null))
-  }, [path])
-  if (!url) return <div className="h-40 rounded-lg bg-secondary/30 animate-pulse" />
-  return <img src={url} alt={alt} className="rounded-lg max-w-full" />
-}
 
 // ── Category grid ─────────────────────────────────────────────────────────────
 
@@ -299,12 +304,16 @@ function PostView({
   onBack,
   onEdit,
   onDelete,
+  onBacklinkClick,
+  onBacklinkPreview,
 }: {
   category: DevLabCategory
   post: DevLabPost
   onBack: () => void
   onEdit: () => void
   onDelete: () => void
+  onBacklinkClick?: (title: string) => void
+  onBacklinkPreview?: (title: string) => void
 }) {
   return (
     <div className="flex flex-col min-h-full">
@@ -387,7 +396,16 @@ function PostView({
               <p className="text-sm text-muted-foreground">No content yet.</p>
             </div>
           ) : (
-            post.blocks.map((block) => <BlockRenderer key={block.id} block={block} />)
+            post.blocks.map((block) => (
+              <BlockRenderer
+                key={block.id}
+                block={block}
+                noteTitle={post.title}
+                noteId={post.id}
+                onBacklinkClick={onBacklinkClick}
+                onBacklinkPreview={onBacklinkPreview}
+              />
+            ))
           )}
         </section>
       </article>
@@ -395,72 +413,29 @@ function PostView({
   )
 }
 
-function BlockRenderer({ block }: { block: DevLabBlock }) {
-  const { openPdf } = usePdfPanel()
-
-  if (block.kind === 'text') {
-    return (
-      <div
-        className="tiptap-render max-w-2xl"
-        dangerouslySetInnerHTML={{ __html: block.html }}
-        onClick={(e) => {
-          const target = (e.target as HTMLElement).closest('[data-bc]') as HTMLElement | null
-          if (!target) return
-          const storagePath = target.dataset.storagePath ?? ''
-          const page = Number(target.dataset.page ?? 1)
-          if (storagePath) openPdf(storagePath, page)
-        }}
-      />
-    )
-  }
-  if (block.kind === 'code') {
-    return (
-      <div className="max-w-5xl">
-        <InteractiveCodeBlock
-          language={block.language}
-          filename={block.filename || undefined}
-          code={block.code}
-          annotations={block.annotations}
-        />
-      </div>
-    )
-  }
-  if (block.kind === 'quote') {
-    return (
-      <blockquote className="max-w-2xl border-l-2 border-primary/50 pl-5 py-1 text-[15px] text-foreground/80 italic">
-        &ldquo;{block.content}&rdquo;
-        {block.attribution && (
-          <footer className="mt-1 text-xs text-muted-foreground not-italic">{block.attribution}</footer>
-        )}
-      </blockquote>
-    )
-  }
-  if (block.kind === 'image') {
-    return (
-      <div className="max-w-3xl">
-        <SignedImage path={block.storage_path} alt={block.alt} />
-      </div>
-    )
-  }
-  return null
-}
-
 // ── Split layout ──────────────────────────────────────────────────────────────
 
 function PostSplitLayout({
   children,
-  pdfPanel,
-  onClosePdf,
+  rightPanel,
+  onClosePanel,
   citationCtx,
   onCiteAtPage,
+  onBacklinkClick,
+  onBacklinkPreview,
 }: {
   children: React.ReactNode
-  pdfPanel: { storagePath: string; page: number } | null
-  onClosePdf: () => void
+  rightPanel: RightPanel | null
+  onClosePanel: () => void
   citationCtx: CitationCtx | null
   onCiteAtPage: (page: number) => void
+  onBacklinkClick?: (title: string) => void
+  onBacklinkPreview?: (title: string) => void
 }) {
   const [currentPdfPage, setCurrentPdfPage] = useState(1)
+  const pdfPanel = rightPanel?.kind === 'pdf' ? rightPanel : null
+  const notePanel = rightPanel?.kind === 'note-preview' ? rightPanel : null
+  const devlabPanel = rightPanel?.kind === 'devlab-preview' ? rightPanel : null
 
   useEffect(() => {
     if (pdfPanel) setCurrentPdfPage(pdfPanel.page)
@@ -470,44 +445,125 @@ function PostSplitLayout({
     <div className="flex overflow-hidden" style={{ height: '100dvh' }}>
       <div
         className="h-full overflow-y-auto shrink-0"
-        style={{ width: pdfPanel ? '55%' : '100%' }}
+        style={{ width: rightPanel ? '55%' : '100%' }}
       >
         {children}
       </div>
-      {pdfPanel && (
+      {rightPanel && (
         <div className="flex-1 h-full flex flex-col border-l border-border/60 min-w-0">
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/60 bg-background/80 shrink-0 gap-2">
-            <span className="text-[11px] text-muted-foreground font-medium">PDF</span>
-            <div className="flex items-center gap-2 ml-auto">
-              {citationCtx && (
-                <button
-                  type="button"
-                  onClick={() => onCiteAtPage(currentPdfPage)}
-                  className="flex items-center gap-1 h-6 px-2 rounded text-[11px] bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-medium"
-                  title="Insertar cita en el post"
-                >
-                  <Bookmark className="size-3" />
-                  Citar pág. {currentPdfPage}
+            {pdfPanel ? (
+              <>
+                <span className="text-[11px] text-muted-foreground font-medium">PDF</span>
+                <div className="flex items-center gap-2 ml-auto">
+                  {citationCtx && (
+                    <button
+                      type="button"
+                      onClick={() => onCiteAtPage(currentPdfPage)}
+                      className="flex items-center gap-1 h-6 px-2 rounded text-[11px] bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-medium"
+                      title="Insertar cita en el post"
+                    >
+                      <Bookmark className="size-3" />
+                      Citar pág. {currentPdfPage}
+                    </button>
+                  )}
+                  <button type="button" onClick={onClosePanel} className="flex items-center justify-center size-5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              </>
+            ) : notePanel ? (
+              <>
+                <span className="text-[11px] font-medium truncate max-w-[160px]">{notePanel.note.title}</span>
+                <button type="button" onClick={onClosePanel} className="ml-auto flex items-center justify-center size-5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                  <X className="size-3.5" />
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={onClosePdf}
-                className="flex items-center justify-center size-5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-                title="Cerrar PDF"
-              >
-                <X className="size-3.5" />
-              </button>
-            </div>
+              </>
+            ) : devlabPanel ? (
+              <>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium shrink-0">DevLab</span>
+                  <span className="text-[11px] font-medium truncate max-w-[140px]">{devlabPanel.post.title}</span>
+                </div>
+                <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => onBacklinkClick?.(devlabPanel.post.title)}
+                    className="flex items-center justify-center size-5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                    title="Ir al post"
+                  >
+                    <ExternalLink className="size-3" />
+                  </button>
+                  <button type="button" onClick={onClosePanel} className="flex items-center justify-center size-5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              </>
+            ) : null}
           </div>
-          <PdfViewer
-            storagePath={pdfPanel.storagePath}
-            initialPage={pdfPanel.page}
-            onPageChange={setCurrentPdfPage}
-            className="flex-1 min-h-0"
-          />
+
+          {pdfPanel ? (
+            <PdfViewer
+              storagePath={pdfPanel.storagePath}
+              initialPage={pdfPanel.page}
+              onPageChange={setCurrentPdfPage}
+              className="flex-1 min-h-0"
+            />
+          ) : notePanel ? (
+            <NotePreviewPanel
+              note={notePanel.note}
+              onBacklinkClick={onBacklinkClick}
+              onBacklinkPreview={onBacklinkPreview}
+            />
+          ) : devlabPanel ? (
+            <DevLabPreviewPanel post={devlabPanel.post} onBacklinkClick={onBacklinkClick} onBacklinkPreview={onBacklinkPreview} />
+          ) : null}
         </div>
       )}
+    </div>
+  )
+}
+
+function DevLabPreviewPanel({
+  post,
+  onBacklinkClick,
+  onBacklinkPreview,
+}: {
+  post: DevLabPost
+  onBacklinkClick?: (title: string) => void
+  onBacklinkPreview?: (title: string) => void
+}) {
+  return (
+    <div className="flex-1 overflow-y-auto min-h-0">
+      <article className="px-6 py-8">
+        <header className="mb-6">
+          <h1 className="text-xl font-semibold tracking-tight text-balance leading-tight">{post.title}</h1>
+          {post.excerpt && <p className="mt-2 text-sm text-muted-foreground">{post.excerpt}</p>}
+          {post.tags.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {post.tags.map((t) => (
+                <Badge key={t} variant="secondary" className="rounded-md text-[10px] font-mono font-normal bg-secondary/50 border border-border/60">{t}</Badge>
+              ))}
+            </div>
+          )}
+        </header>
+        <div className="h-px bg-border/40 mb-5" />
+        <section className="space-y-6">
+          {post.blocks.length === 0
+            ? <p className="text-sm text-muted-foreground">Sin contenido.</p>
+            : post.blocks.map((block) => (
+                <BlockRenderer
+                  key={block.id}
+                  block={block}
+                  noteTitle={post.title}
+                  noteId={post.id}
+                  onBacklinkClick={onBacklinkClick}
+                  onBacklinkPreview={onBacklinkPreview}
+                />
+              ))
+          }
+        </section>
+      </article>
     </div>
   )
 }
@@ -515,6 +571,7 @@ function PostSplitLayout({
 // ── Root component ────────────────────────────────────────────────────────────
 
 export function DevLabSection({ initialPostId, initialCategoryId }: { initialPostId?: string; initialCategoryId?: string } = {}) {
+  const navigate = useNavigate()
   const [view, setView] = useState<View>({ kind: 'categories' })
   const [categories, setCategories] = useState<DevLabCategory[]>([])
   const [posts, setPosts] = useState<DevLabPost[]>([])
@@ -523,35 +580,90 @@ export function DevLabSection({ initialPostId, initialCategoryId }: { initialPos
   const [loadingPosts, setLoadingPosts] = useState(false)
   const [catFormOpen, setCatFormOpen] = useState(false)
   const [editingCat, setEditingCat] = useState<DevLabCategory | null>(null)
-  const [pdfPanel, setPdfPanel] = useState<{ storagePath: string; page: number } | null>(null)
+  const [rightPanel, setRightPanel] = useState<RightPanel | null>(null)
   const [citationCtx, setCitationCtx] = useState<CitationCtx | null>(null)
   const insertFnRef = useRef<((page: number) => void) | null>(null)
-
+  const [noteIndex, setNoteIndex] = useState<NoteIndex>(new Map())
+  const [backlinkSuggestions, setBacklinkSuggestions] = useState<Array<{ id: string; title: string; hint?: string }>>([])
   const pdfCtxValue = useMemo(
     () => ({
-      openPdf: (storagePath: string, page = 1) => setPdfPanel({ storagePath, page }),
+      openPdf: (storagePath: string, page = 1) => setRightPanel({ kind: 'pdf', storagePath, page }),
       startCitationBrowse: (
         book: { id: string; title: string; storage_path: string },
         insertFn: (page: number) => void,
       ) => {
         insertFnRef.current = insertFn
         setCitationCtx({ bookId: book.id, bookTitle: book.title, storagePath: book.storage_path, insertFn })
-        setPdfPanel({ storagePath: book.storage_path, page: 1 })
+        setRightPanel({ kind: 'pdf', storagePath: book.storage_path, page: 1 })
       },
     }),
     [],
   )
 
-  function closePdfAndCitation() {
-    setPdfPanel(null)
+  function closeRightPanel() {
+    setRightPanel(null)
     setCitationCtx(null)
     insertFnRef.current = null
+  }
+
+  // Keep legacy alias used inside handlers
+  const closePdfAndCitation = closeRightPanel
+
+  function goToView(newView: View) {
+    setView(newView)
+    if (newView.kind === 'categories') {
+      navigate({ to: '/devlab', search: { post: undefined, category: undefined } })
+    } else if (newView.kind === 'posts') {
+      navigate({ to: '/devlab', search: { post: undefined, category: newView.categoryId } })
+    } else if (newView.kind === 'post') {
+      navigate({ to: '/devlab', search: { category: newView.categoryId, post: newView.postId } })
+    }
+    // editor: no URL change (transient)
   }
 
   function handleCiteAtPage(page: number) {
     citationCtx?.insertFn(page)
     toast.success(`Cita insertada — pág. ${page}`)
   }
+
+  // ── Backlink support ──────────────────────────────────────────────────────
+
+  function handleBacklinkNavigate(title: string) {
+    const entry = noteIndex.get(title)
+    if (!entry) { toast.error(`"${title}" no encontrado`); return }
+    if (entry.type === 'devlab') {
+      if (entry.category_id) goToView({ kind: 'post', categoryId: entry.category_id, postId: entry.id })
+    } else {
+      navigate({
+        to: '/faculty/$subjectId',
+        params: { subjectId: entry.subject_id },
+        search: { note: entry.id },
+      })
+    }
+  }
+
+  async function handleBacklinkPreview(title: string) {
+    const entry = noteIndex.get(title)
+    if (!entry) { toast.error(`"${title}" no encontrado`); return }
+    try {
+      if (entry.type === 'devlab') {
+        const post = await getDevLabPost(entry.id)
+        setRightPanel({ kind: 'devlab-preview', post })
+        setCitationCtx(null)
+      } else {
+        const note = await getFacultyNote(entry.id)
+        setRightPanel({ kind: 'note-preview', note })
+        setCitationCtx(null)
+      }
+    } catch {
+      toast.error('Error al cargar')
+    }
+  }
+
+  const backlinkActionsValue = useMemo(
+    () => ({ onNavigate: handleBacklinkNavigate, onPreview: handleBacklinkPreview }),
+    [noteIndex],
+  )
 
   function syncCitations(postId: string, blocks: DevLabBlock[]) {
     const citations: { book_id: string; page: number }[] = []
@@ -569,6 +681,25 @@ export function DevLabSection({ initialPostId, initialCategoryId }: { initialPos
       console.error('[citations] sync error:', err)
     })
   }
+
+  // Load backlink suggestions + build note index on mount
+  useEffect(() => {
+    Promise.all([listAllNotesSummary(), listAllDevLabPostsSummary()])
+      .then(([notes, posts]) => {
+        const idx: NoteIndex = new Map()
+        const noteSugs = notes.map((n) => {
+          idx.set(n.title, { id: n.id, type: 'faculty', subject_id: n.subject_id })
+          return { id: n.id, title: n.title, hint: n.subject_name || n.kind }
+        })
+        const postSugs = posts.map((p) => {
+          idx.set(p.title, { id: p.id, type: 'devlab', category_id: p.category_id })
+          return { id: p.id, title: p.title, hint: p.category_label ? `DevLab · ${p.category_label}` : 'DevLab' }
+        })
+        setNoteIndex(idx)
+        setBacklinkSuggestions([...noteSugs, ...postSugs])
+      })
+      .catch(() => {})
+  }, [])
 
   // Load categories on mount
   useEffect(() => {
@@ -595,17 +726,27 @@ export function DevLabSection({ initialPostId, initialCategoryId }: { initialPos
       .finally(() => setLoadingPosts(false))
   }, [view.kind === 'posts' ? view.categoryId : null])
 
-  // Auto-open post from URL search params
+  // Sync URL params → view state (handles deep links and browser back/forward)
   useEffect(() => {
-    if (!initialPostId || !initialCategoryId) return
-    setLoadingPosts(true)
-    listDevLabPosts(initialCategoryId)
-      .then((categoryPosts) => {
-        setPosts(categoryPosts)
-        setView({ kind: 'post', categoryId: initialCategoryId, postId: initialPostId })
-      })
-      .catch(() => {})
-      .finally(() => setLoadingPosts(false))
+    if (initialPostId && initialCategoryId) {
+      if (view.kind === 'post' && view.postId === initialPostId && view.categoryId === initialCategoryId) return
+      setLoadingPosts(true)
+      listDevLabPosts(initialCategoryId)
+        .then((categoryPosts) => {
+          setPosts(categoryPosts)
+          setView({ kind: 'post', categoryId: initialCategoryId, postId: initialPostId })
+        })
+        .catch(() => {})
+        .finally(() => setLoadingPosts(false))
+    } else if (initialCategoryId && !initialPostId) {
+      if (view.kind === 'editor') return
+      if (view.kind === 'posts' && view.categoryId === initialCategoryId) return
+      setView({ kind: 'posts', categoryId: initialCategoryId })
+    } else if (!initialCategoryId && !initialPostId) {
+      if (view.kind === 'editor') return
+      if (view.kind === 'categories') return
+      setView({ kind: 'categories' })
+    }
   }, [initialPostId, initialCategoryId])
 
   // ── Category CRUD ──────────────────────────────────────────────────────────
@@ -674,7 +815,7 @@ export function DevLabSection({ initialPostId, initialCategoryId }: { initialPos
       setPosts((prev) => prev.map((p) => p.id === view.editPost!.id ? { ...p, ...payload } : p))
       syncCitations(view.editPost.id, draft.blocks)
       toast.success('Post updated')
-      setView({ kind: 'posts', categoryId: categoryId! })
+      goToView({ kind: 'posts', categoryId: categoryId! })
       closePdfAndCitation()
     } else {
       // Create
@@ -683,7 +824,7 @@ export function DevLabSection({ initialPostId, initialCategoryId }: { initialPos
       setPostCounts((prev) => ({ ...prev, [categoryId!]: (prev[categoryId!] ?? 0) + 1 }))
       syncCitations(post.id, draft.blocks)
       toast.success('Post published')
-      setView({ kind: 'posts', categoryId: categoryId! })
+      goToView({ kind: 'posts', categoryId: categoryId! })
       closePdfAndCitation()
     }
   }
@@ -695,7 +836,7 @@ export function DevLabSection({ initialPostId, initialCategoryId }: { initialPos
       const catId = view.kind === 'post' ? view.categoryId : (view.kind === 'posts' ? view.categoryId : null)
       if (catId) setPostCounts((prev) => ({ ...prev, [catId]: Math.max(0, (prev[catId] ?? 1) - 1) }))
       toast.success('Post deleted')
-      if (view.kind === 'post') { setView({ kind: 'posts', categoryId: view.categoryId }); closePdfAndCitation() }
+      if (view.kind === 'post') { goToView({ kind: 'posts', categoryId: view.categoryId }); closePdfAndCitation() }
     } catch {
       toast.error('Failed to delete post')
     }
@@ -731,7 +872,7 @@ export function DevLabSection({ initialPostId, initialCategoryId }: { initialPos
         <CategoryGrid
           categories={categories}
           postCounts={postCounts}
-          onSelect={(id) => setView({ kind: 'posts', categoryId: id })}
+          onSelect={(id) => goToView({ kind: 'posts', categoryId: id })}
           onEdit={(cat) => { setEditingCat(cat); setCatFormOpen(true) }}
           onDelete={handleDeleteCategory}
           onNew={() => { setEditingCat(null); setCatFormOpen(true) }}
@@ -743,50 +884,64 @@ export function DevLabSection({ initialPostId, initialCategoryId }: { initialPos
           category={catForView}
           posts={posts}
           loading={loadingPosts}
-          onSelect={(postId) => setView({ kind: 'post', categoryId: view.categoryId, postId })}
+          onSelect={(postId) => goToView({ kind: 'post', categoryId: view.categoryId, postId })}
           onEdit={(post) => setView({ kind: 'editor', categoryId: view.categoryId, editPost: post })}
           onDelete={handleDeletePost}
-          onBack={() => setView({ kind: 'categories' })}
+          onBack={() => goToView({ kind: 'categories' })}
           onNewPost={() => setView({ kind: 'editor', categoryId: view.categoryId })}
         />
       )}
 
       {!loadingCats && view.kind === 'post' && catForView && postForView && (
-        <PdfPanelContext.Provider value={pdfCtxValue}>
-          <PostSplitLayout
-            pdfPanel={pdfPanel}
-            onClosePdf={closePdfAndCitation}
-            citationCtx={citationCtx}
-            onCiteAtPage={handleCiteAtPage}
-          >
-            <PostView
-              category={catForView}
-              post={postForView}
-              onBack={() => { setView({ kind: 'posts', categoryId: view.categoryId }); closePdfAndCitation() }}
-              onEdit={() => setView({ kind: 'editor', categoryId: view.categoryId, editPost: postForView })}
-              onDelete={() => handleDeletePost(postForView)}
-            />
-          </PostSplitLayout>
-        </PdfPanelContext.Provider>
+        <BacklinkSuggestionsContext.Provider value={backlinkSuggestions}>
+          <BacklinkActionsContext.Provider value={backlinkActionsValue}>
+            <PdfPanelContext.Provider value={pdfCtxValue}>
+              <PostSplitLayout
+                rightPanel={rightPanel}
+                onClosePanel={closeRightPanel}
+                citationCtx={citationCtx}
+                onCiteAtPage={handleCiteAtPage}
+                onBacklinkClick={handleBacklinkNavigate}
+                onBacklinkPreview={handleBacklinkPreview}
+              >
+                <PostView
+                  category={catForView}
+                  post={postForView}
+                  onBack={() => { goToView({ kind: 'posts', categoryId: view.categoryId }); closeRightPanel() }}
+                  onEdit={() => setView({ kind: 'editor', categoryId: view.categoryId, editPost: postForView })}
+                  onDelete={() => handleDeletePost(postForView)}
+                  onBacklinkClick={handleBacklinkNavigate}
+                  onBacklinkPreview={handleBacklinkPreview}
+                />
+              </PostSplitLayout>
+            </PdfPanelContext.Provider>
+          </BacklinkActionsContext.Provider>
+        </BacklinkSuggestionsContext.Provider>
       )}
 
       {!loadingCats && view.kind === 'editor' && catForView && (
-        <PdfPanelContext.Provider value={pdfCtxValue}>
-          <PostSplitLayout
-            pdfPanel={pdfPanel}
-            onClosePdf={closePdfAndCitation}
-            citationCtx={citationCtx}
-            onCiteAtPage={handleCiteAtPage}
-          >
-            <DevLabPostEditor
-              categoryLabel={catForView.label}
-              categoryId={view.categoryId}
-              initial={view.editPost}
-              onSave={handleSavePost}
-              onCancel={() => { setView({ kind: 'posts', categoryId: view.categoryId }); closePdfAndCitation() }}
-            />
-          </PostSplitLayout>
-        </PdfPanelContext.Provider>
+        <BacklinkSuggestionsContext.Provider value={backlinkSuggestions}>
+          <BacklinkActionsContext.Provider value={backlinkActionsValue}>
+            <PdfPanelContext.Provider value={pdfCtxValue}>
+              <PostSplitLayout
+                rightPanel={rightPanel}
+                onClosePanel={closeRightPanel}
+                citationCtx={citationCtx}
+                onCiteAtPage={handleCiteAtPage}
+                onBacklinkClick={handleBacklinkNavigate}
+                onBacklinkPreview={handleBacklinkPreview}
+              >
+                <DevLabPostEditor
+                  categoryLabel={catForView.label}
+                  categoryId={view.categoryId}
+                  initial={view.editPost}
+                  onSave={handleSavePost}
+                  onCancel={() => { goToView({ kind: 'posts', categoryId: view.categoryId }); closeRightPanel() }}
+                />
+              </PostSplitLayout>
+            </PdfPanelContext.Provider>
+          </BacklinkActionsContext.Provider>
+        </BacklinkSuggestionsContext.Provider>
       )}
 
       {/* Always mounted — never remounts when view changes, Dialog opens reliably */}

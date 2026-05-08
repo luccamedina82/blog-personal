@@ -6,6 +6,7 @@ import { Bookmark, ExternalLink, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { PdfViewer } from '@/components/library/pdf-viewer'
 import { PdfPanelContext } from '@/lib/faculty/pdf-panel-context'
+import { BacklinkActionsContext } from '@/lib/shared/backlink-actions-context'
 import { FacultyShell } from '@/components/faculty/faculty-shell'
 import { NotesList } from '@/components/faculty/notes-list'
 import { NoteView, NotePreviewPanel, BlockRenderer } from '@/components/faculty/note-view'
@@ -46,10 +47,7 @@ export const Route = createFileRoute('/faculty/$subjectId')({
   component: SubjectDetail,
 })
 
-type View =
-  | { kind: 'list' }
-  | { kind: 'note'; noteId: string }
-  | { kind: 'editor'; editNote?: FacultyNote }
+// Editor-only state; note viewing is URL-driven via search.note
 
 type CitationCtx = {
   bookId: string
@@ -83,7 +81,8 @@ function SubjectDetail() {
   const [citationsByTopic, setCitationsByTopic] = useState<Map<string, FacultyTopicCitation[]>>(new Map())
   const [noteIndex, setNoteIndex] = useState<NoteIndex>(new Map())
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<View>({ kind: 'list' })
+  const [isEditing, setIsEditing] = useState(false)
+  const [editNote, setEditNote] = useState<FacultyNote | undefined>()
   const [activeTab, setActiveTab] = useState<'notas' | 'deadlines' | 'temario' | 'calificaciones'>('notas')
   const [rightPanel, setRightPanel] = useState<RightPanel | null>(null)
   const [citationCtx, setCitationCtx] = useState<CitationCtx | null>(null)
@@ -105,6 +104,26 @@ function SubjectDetail() {
     [],
   )
 
+  function openNote(noteId: string) {
+    navigate({ to: '/faculty/$subjectId', params: { subjectId }, search: { note: noteId } })
+    setIsEditing(false)
+    setEditNote(undefined)
+  }
+
+  function closeNote() {
+    navigate({ to: '/faculty/$subjectId', params: { subjectId }, search: { note: undefined } })
+  }
+
+  function openEditor(note?: FacultyNote) {
+    setIsEditing(true)
+    setEditNote(note)
+  }
+
+  function closeEditor() {
+    setIsEditing(false)
+    setEditNote(undefined)
+  }
+
   function closeRightPanel() {
     setRightPanel(null)
     setCitationCtx(null)
@@ -120,7 +139,7 @@ function SubjectDetail() {
     // Same-subject note
     const local = notes.find((n) => n.title === title)
     if (local) {
-      setView({ kind: 'note', noteId: local.id })
+      openNote(local.id)
       setRightPanel((prev) => (prev?.kind === 'note-preview' ? null : prev))
       return
     }
@@ -165,8 +184,7 @@ function SubjectDetail() {
 
   function handleOpenFullNote(note: FacultyNote) {
     if (note.subject_id === subjectId) {
-      // Same subject: open via state
-      setView({ kind: 'note', noteId: note.id })
+      openNote(note.id)
       setRightPanel(null)
     } else {
       // Cross-subject: navigate
@@ -218,16 +236,6 @@ function SubjectDetail() {
       .finally(() => setLoading(false))
   }, [subjectId])
 
-  // Auto-open note from search param (cross-subject navigation target)
-  useEffect(() => {
-    if (!search.note || notes.length === 0) return
-    const target = notes.find((n) => n.id === search.note)
-    if (target) {
-      setView({ kind: 'note', noteId: target.id })
-      // Remove search param from URL without adding to history
-      navigate({ to: '/faculty/$subjectId', params: { subjectId }, search: { note: undefined }, replace: true })
-    }
-  }, [search.note, notes])
 
   function handleCitationAdded(topicId: string, citation: FacultyTopicCitation) {
     setCitationsByTopic((prev) => {
@@ -273,10 +281,7 @@ function SubjectDetail() {
   }
 
   function handleViewDeadlineNote(noteId: string) {
-    const note = notes.find((n) => n.id === noteId)
-    if (note) {
-      setView({ kind: 'note', noteId: note.id })
-    }
+    openNote(noteId)
   }
 
   async function handleCreateDeadlineNote(d: FacultyDeadline) {
@@ -294,7 +299,7 @@ function SubjectDetail() {
       await setDeadlineNoteLink(d.id, created.id)
       setNotes((prev) => [created, ...prev])
       setDeadlines((prev) => prev.map((x) => (x.id === d.id ? { ...x, note_id: created.id } : x)))
-      setView({ kind: 'editor', editNote: created })
+      openEditor(created)
       toast.success('Nota creada')
     } catch {
       toast.error('Error al crear nota')
@@ -321,19 +326,21 @@ function SubjectDetail() {
     )
   }
 
+  // Derive current note from URL — makes browser back/forward work
+  const viewingNote = !isEditing ? notes.find((n) => n.id === search.note) ?? null : null
+
   // ── Note view ─────────────────────────────────────────────────────────────
 
-  if (view.kind === 'note') {
-    const note = notes.find((n) => n.id === view.noteId)
-    if (!note) { setView({ kind: 'list' }); return null }
+  if (viewingNote) {
+    const note = viewingNote
 
     async function handleDeleteFromView() {
       try {
-        await deleteFacultyNote(note!.id)
-        setNotes((prev) => prev.filter((n) => n.id !== note!.id))
-        setView({ kind: 'list' })
+        await deleteFacultyNote(note.id)
+        setNotes((prev) => prev.filter((n) => n.id !== note.id))
+        closeNote()
         closeRightPanel()
-        toast.success(`"${note!.title}" eliminada`)
+        toast.success(`"${note.title}" eliminada`)
       } catch {
         toast.error('Error al eliminar')
       }
@@ -360,8 +367,8 @@ function SubjectDetail() {
           <NoteView
             note={note}
             subject={subject}
-            onBack={() => { setView({ kind: 'list' }); closeRightPanel() }}
-            onEdit={() => setView({ kind: 'editor', editNote: note })}
+            onBack={() => { closeNote(); closeRightPanel() }}
+            onEdit={() => openEditor(note)}
             onDelete={handleDeleteFromView}
             onBacklinkClick={handleBacklinkNavigate}
             onBacklinkPreview={handleBacklinkPreview}
@@ -373,8 +380,9 @@ function SubjectDetail() {
 
   // ── Note editor ───────────────────────────────────────────────────────────
 
-  if (view.kind === 'editor') {
+  if (isEditing) {
     return (
+      <BacklinkActionsContext.Provider value={{ onNavigate: handleBacklinkNavigate, onPreview: handleBacklinkPreview }}>
       <PdfPanelContext.Provider value={pdfCtxValue}>
         <NoteSplitLayout
           rightPanel={rightPanel}
@@ -397,20 +405,21 @@ function SubjectDetail() {
             topics={topics}
             groups={groups}
             units={units}
-            initial={view.editNote}
+            initial={editNote}
             onSaved={(saved) => {
               setNotes((prev) => {
                 const exists = prev.find((n) => n.id === saved.id)
                 if (exists) return prev.map((n) => (n.id === saved.id ? saved : n))
                 return [saved, ...prev]
               })
-              setView({ kind: 'list' })
+              closeEditor()
               closeRightPanel()
             }}
-            onCancel={() => { setView({ kind: 'list' }); closeRightPanel() }}
+            onCancel={() => { closeEditor(); closeRightPanel() }}
           />
         </NoteSplitLayout>
       </PdfPanelContext.Provider>
+      </BacklinkActionsContext.Provider>
     )
   }
 
@@ -475,9 +484,9 @@ function SubjectDetail() {
           {activeTab === 'notas' && (
             <NotesList
               notes={notes}
-              onNew={() => setView({ kind: 'editor' })}
-              onSelect={(note) => setView({ kind: 'note', noteId: note.id })}
-              onEdit={(note) => setView({ kind: 'editor', editNote: note })}
+              onNew={() => openEditor()}
+              onSelect={(note) => openNote(note.id)}
+              onEdit={(note) => openEditor(note)}
               onDeleted={(id) => setNotes((prev) => prev.filter((n) => n.id !== id))}
               linkedToDeadlineIds={linkedNoteIds}
             />

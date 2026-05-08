@@ -1,14 +1,20 @@
 import { useEditor, EditorContent } from '@tiptap/react'
+import { Extension } from '@tiptap/core'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
 import Placeholder from '@tiptap/extension-placeholder'
 import { Bold, Italic, Underline as UnderlineIcon, BookOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { useBacklinkSuggestions } from '@/lib/faculty/backlinks-context'
+import { createPortal } from 'react-dom'
+import { ArrowUpRight, Eye } from 'lucide-react'
+import { useBacklinkSuggestions } from '@/lib/shared/backlinks-context'
+import { useBacklinkActions } from '@/lib/shared/backlink-actions-context'
 import { BookCitationExtension } from '@/lib/faculty/book-citation-extension'
 import { BookCitationPicker } from '@/components/library/book-citation-picker'
-import { usePdfPanel } from '@/lib/faculty/pdf-panel-context'
+import { usePdfPanel } from '@/lib/shared/pdf-panel-context'
 
 interface TiptapEditorProps {
   value: string
@@ -17,13 +23,118 @@ interface TiptapEditorProps {
   className?: string
 }
 
+// ── Backlink popover (edit mode) ──────────────────────────────────────────────
+
+function EditorBacklinkPopover({
+  title,
+  pos,
+  onNavigate,
+  onPreview,
+  onClose,
+}: {
+  title: string
+  pos: { top: number; left: number }
+  onNavigate: () => void
+  onPreview: () => void
+  onClose: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [onClose])
+
+  return createPortal(
+    <div
+      ref={ref}
+      className="fixed z-[200] rounded-md border border-border bg-popover shadow-md py-1 min-w-[170px]"
+      style={{
+        top: pos.top + 6,
+        left: Math.max(8, Math.min(pos.left, window.innerWidth - 200)),
+      }}
+    >
+      <p className="px-2.5 py-1 text-[10px] text-muted-foreground font-mono truncate">[[{title}]]</p>
+      <div className="h-px bg-border/40 my-0.5" />
+      <button
+        type="button"
+        onClick={onNavigate}
+        className="w-full flex items-center gap-2 px-2.5 py-1.5 text-sm text-left hover:bg-accent transition-colors"
+      >
+        <ArrowUpRight className="size-3.5 text-muted-foreground shrink-0" />
+        Ir a la nota
+      </button>
+      <button
+        type="button"
+        onClick={onPreview}
+        className="w-full flex items-center gap-2 px-2.5 py-1.5 text-sm text-left hover:bg-accent transition-colors"
+      >
+        <Eye className="size-3.5 text-muted-foreground shrink-0" />
+        Preview lateral
+      </button>
+    </div>,
+    document.body,
+  )
+}
+
+// ── Backlink highlight decoration ────────────────────────────────────────────
+// Applies .faculty-backlink class to [[title]] spans without changing stored HTML
+
+const backlinkDecorationKey = new PluginKey('backlinkDecoration')
+
+const BacklinkDecorationExtension = Extension.create({
+  name: 'backlinkDecoration',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: backlinkDecorationKey,
+        props: {
+          decorations(state) {
+            const decos: Decoration[] = []
+            const re = /\[\[([^\]]+)\]\]/g
+            state.doc.descendants((node, pos) => {
+              if (!node.isText || !node.text) return
+              re.lastIndex = 0
+              let match: RegExpExecArray | null
+              while ((match = re.exec(node.text)) !== null) {
+                decos.push(
+                  Decoration.inline(
+                    pos + match.index,
+                    pos + match.index + match[0].length,
+                    { class: 'faculty-backlink' },
+                  ),
+                )
+              }
+            })
+            return DecorationSet.create(state.doc, decos)
+          },
+        },
+      }),
+    ]
+  },
+})
+
+// ── Main editor ───────────────────────────────────────────────────────────────
+
 export function TiptapEditor({ value, onChange, placeholder, className }: TiptapEditorProps) {
   const allSuggestions = useBacklinkSuggestions()
+  const { onNavigate: backlinkNavigate, onPreview: backlinkPreview } = useBacklinkActions()
   const { openPdf, startCitationBrowse } = usePdfPanel()
   const [query, setQuery] = useState<string | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [activeBacklink, setActiveBacklink] = useState<{ title: string; pos: { top: number; left: number } } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -62,6 +173,7 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
       Underline,
       Placeholder.configure({ placeholder: placeholder ?? 'Write your content here…' }),
       BookCitationExtension,
+      BacklinkDecorationExtension,
     ],
     content: value,
     onUpdate({ editor: e }) {
@@ -73,7 +185,6 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
       if (match) {
         setQuery(match[1])
         setActiveIndex(0)
-        // Position dropdown just below the cursor
         if (containerRef.current) {
           try {
             const coords = e.view.coordsAtPos(from)
@@ -106,6 +217,44 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
     } else if (e.key === 'Escape') {
       setQuery(null)
       setDropdownPos(null)
+    }
+  }
+
+  function handleEditorClick(e: React.MouseEvent) {
+    // Book citation click
+    const bcTarget = (e.target as HTMLElement).closest('[data-bc]') as HTMLElement | null
+    if (bcTarget) {
+      const storagePath = bcTarget.dataset.storagePath ?? ''
+      const page = Number(bcTarget.dataset.page ?? 1)
+      if (storagePath) openPdf(storagePath, page)
+      return
+    }
+
+    // [[backlink]] click — only when context is wired (suggestions available)
+    if (allSuggestions.length === 0 || !editor) return
+
+    const coords = { left: e.clientX, top: e.clientY }
+    const posAtCoords = editor.view.posAtCoords(coords)
+    if (!posAtCoords) return
+
+    const { doc } = editor.state
+    const $pos = doc.resolve(posAtCoords.pos)
+    const text = $pos.parent.textContent
+    const offset = $pos.parentOffset
+
+    const re = /\[\[([^\]]+)\]\]/g
+    let match: RegExpExecArray | null
+    while ((match = re.exec(text)) !== null) {
+      if (offset >= match.index && offset <= match.index + match[0].length) {
+        const title = match[1]
+        try {
+          const editorCoords = editor.view.coordsAtPos(posAtCoords.pos)
+          setActiveBacklink({ title, pos: { top: editorCoords.bottom, left: editorCoords.left } })
+        } catch {
+          setActiveBacklink({ title, pos: { top: e.clientY, left: e.clientX } })
+        }
+        break
+      }
     }
   }
 
@@ -158,13 +307,7 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
         editor={editor}
         className="px-3 py-3 text-sm leading-relaxed min-h-[120px]"
         onKeyDown={handleKeyDown}
-        onClick={(e) => {
-          const target = (e.target as HTMLElement).closest('[data-bc]') as HTMLElement | null
-          if (!target) return
-          const storagePath = target.dataset.storagePath ?? ''
-          const page = Number(target.dataset.page ?? 1)
-          if (storagePath) openPdf(storagePath, page)
-        }}
+        onClick={handleEditorClick}
       />
 
       <BookCitationPicker
@@ -187,7 +330,7 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
         }}
       />
 
-      {/* [[backlink]] autocomplete dropdown — anchored to cursor position */}
+      {/* [[backlink]] autocomplete dropdown */}
       {filtered.length > 0 && dropdownPos && (
         <div
           ref={dropdownRef}
@@ -218,6 +361,23 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
             </button>
           ))}
         </div>
+      )}
+
+      {/* [[backlink]] edit-mode popover */}
+      {activeBacklink && (
+        <EditorBacklinkPopover
+          title={activeBacklink.title}
+          pos={activeBacklink.pos}
+          onNavigate={() => {
+            backlinkNavigate(activeBacklink.title)
+            setActiveBacklink(null)
+          }}
+          onPreview={() => {
+            backlinkPreview(activeBacklink.title)
+            setActiveBacklink(null)
+          }}
+          onClose={() => setActiveBacklink(null)}
+        />
       )}
     </div>
   )
