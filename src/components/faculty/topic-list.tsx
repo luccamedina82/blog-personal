@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Link2, X, BookOpen, FileText, FlaskConical } from 'lucide-react'
+import { Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Link2, X, BookOpen, FileText, FlaskConical, Check, Clock } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -39,6 +39,15 @@ const CITATION_PREFIX: Record<FacultyTopicCitationKind, string> = {
   library_book: '📖',
 }
 
+const GROUP_ACCENTS = [
+  { border: 'border-l-teal-500/60', bg: 'bg-teal-500/5', color: '#14b8a6' },
+  { border: 'border-l-violet-500/60', bg: 'bg-violet-500/5', color: '#8b5cf6' },
+  { border: 'border-l-blue-500/60', bg: 'bg-blue-500/5', color: '#3b82f6' },
+  { border: 'border-l-amber-500/60', bg: 'bg-amber-500/5', color: '#f59e0b' },
+  { border: 'border-l-rose-500/60', bg: 'bg-rose-500/5', color: '#f43f5e' },
+  { border: 'border-l-emerald-500/60', bg: 'bg-emerald-500/5', color: '#10b981' },
+] as const
+
 type AddingIn =
   | { kind: 'group' }
   | { kind: 'unit'; groupId: string }
@@ -72,17 +81,21 @@ type Props = {
   onCitationClick: (citation: FacultyTopicCitation) => void
 }
 
-function MiniProgress({ dominado, total }: { dominado: number; total: number }) {
-  const pct = total > 0 ? Math.round((dominado / total) * 100) : 0
+function DonutRing({ mastered, total, color }: { mastered: number; total: number; color: string }) {
+  const r = 14
+  const circumference = 2 * Math.PI * r
+  const dash = total === 0 ? 0 : (mastered / total) * circumference
   return (
-    <div className="flex items-center gap-1.5 shrink-0">
-      <div className="w-12 h-1 rounded-full bg-secondary overflow-hidden">
-        <div className="h-1 rounded-full bg-green-500 transition-all duration-500" style={{ width: `${pct}%` }} />
-      </div>
-      <span className="text-[10px] text-muted-foreground tabular-nums whitespace-nowrap">
-        {dominado}/{total}
-      </span>
-    </div>
+    <svg width="34" height="34" viewBox="0 0 36 36" className="shrink-0 -rotate-90">
+      <circle cx="18" cy="18" r={r} fill="none" stroke="currentColor" strokeWidth="3" className="text-border/30" />
+      <circle
+        cx="18" cy="18" r={r} fill="none"
+        stroke={color} strokeWidth="3"
+        strokeDasharray={`${dash} ${circumference}`}
+        strokeLinecap="round"
+        className="transition-all duration-500"
+      />
+    </svg>
   )
 }
 
@@ -113,12 +126,27 @@ export function TopicList({
   const [editing, setEditing] = useState<Editing>(null)
   const [editTitle, setEditTitle] = useState('')
   const [pickerTopicId, setPickerTopicId] = useState<string | null>(null)
+  const [filterStatus, setFilterStatus] = useState<'all' | FacultyTopicStatus>('all')
 
   const sortedGroups = [...groups].sort((a, b) => a.order_index - b.order_index)
   const unclassified = topics.filter((t) => !t.unit_id).sort((a, b) => a.order_index - b.order_index)
   const totalDominado = topics.filter((t) => t.status === 'dominado').length
   const overallProgress = topics.length > 0 ? Math.round((totalDominado / topics.length) * 100) : 0
   const showUnclassified = sortedGroups.length === 0 || unclassified.length > 0
+
+  function applyFilter(list: FacultyTopic[]) {
+    if (filterStatus === 'all') return list
+    return list.filter((t) => t.status === filterStatus)
+  }
+
+  function cycleStatus(t: FacultyTopic) {
+    const next: Record<FacultyTopicStatus, FacultyTopicStatus> = {
+      pendiente: 'visto',
+      visto: 'dominado',
+      dominado: 'pendiente',
+    }
+    handleStatusChange(t, next[t.status])
+  }
   const examDeadlines = deadlines.filter((d) =>
     ['parcial', 'final', 'recuperatorio'].includes(d.kind),
   )
@@ -332,13 +360,13 @@ export function TopicList({
     const citations = citationsByTopic.get(topicId) ?? []
     if (citations.length === 0) return null
     return (
-      <div className="flex flex-wrap gap-1 mt-1.5 pl-8">
+      <div className="flex flex-wrap gap-1 mt-1">
         {citations.map((c) => {
           const IconComp = CITATION_ICON[c.source_kind]
           return (
             <div
               key={c.id}
-              className="group/chip flex items-center gap-1 h-5 rounded-full bg-secondary/60 border border-border/50 px-2 text-[10px] text-muted-foreground"
+              className="group/chip flex items-center gap-1 h-5 rounded-full bg-secondary/60 border border-border/50 px-2 text-[10px] text-muted-foreground hover:bg-primary/10 hover:border-primary/30 hover:text-foreground transition-colors cursor-pointer"
             >
               <button
                 type="button"
@@ -370,85 +398,68 @@ export function TopicList({
   function renderTopicRows(sortedTopics: FacultyTopic[]) {
     if (sortedTopics.length === 0) return null
     return (
-      <ul className="space-y-1 mb-1.5">
-        {sortedTopics.map((t, i) => (
+      <ul className="space-y-0.5">
+        {sortedTopics.map((t) => (
           <li key={t.id} className="group/topic">
-            <div className="flex items-center gap-2 rounded border border-border/40 bg-card/30 px-2.5 py-1.5">
-              <div className="flex flex-col shrink-0">
-                <button
-                  type="button"
-                  onClick={() => moveTopic(sortedTopics, i, -1)}
-                  disabled={i === 0}
-                  className="text-muted-foreground/40 hover:text-muted-foreground transition-colors disabled:opacity-0 disabled:pointer-events-none"
-                >
-                  <ChevronUp className="size-3" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveTopic(sortedTopics, i, 1)}
-                  disabled={i === sortedTopics.length - 1}
-                  className="text-muted-foreground/40 hover:text-muted-foreground transition-colors disabled:opacity-0 disabled:pointer-events-none"
-                >
-                  <ChevronDown className="size-3" />
-                </button>
+            <div className="flex items-start gap-2.5 py-1.5 px-1 rounded hover:bg-secondary/20 transition-colors">
+              {/* Status circle — click to cycle P→V→D */}
+              <button
+                type="button"
+                onClick={() => cycleStatus(t)}
+                title={`${t.status} — click para cambiar`}
+                className="mt-0.5 shrink-0 focus:outline-none"
+              >
+                <span className={cn(
+                  'flex size-5 items-center justify-center rounded-full transition-all',
+                  t.status === 'dominado' && 'bg-green-500',
+                  t.status === 'visto' && 'border-2 border-blue-400',
+                  t.status === 'pendiente' && 'border border-muted-foreground/30 hover:border-muted-foreground/60',
+                )}>
+                  {t.status === 'dominado' && <Check className="size-3 text-white" />}
+                  {t.status === 'visto' && <Clock className="size-3 text-blue-400" />}
+                </span>
+              </button>
+
+              {/* Title + citations */}
+              <div className="flex-1 min-w-0">
+                {editing?.kind === 'topic' && editing.id === t.id ? (
+                  <input
+                    autoFocus
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    onBlur={commitEdit}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commitEdit()
+                      if (e.key === 'Escape') setEditing(null)
+                    }}
+                    className="w-full bg-transparent text-sm outline-none border-b border-primary/40 py-0.5"
+                  />
+                ) : (
+                  <span
+                    className={cn(
+                      'text-sm leading-snug cursor-text block',
+                      t.status === 'dominado' && 'text-muted-foreground/50 line-through',
+                      t.status === 'visto' && 'text-foreground/80',
+                      t.status === 'pendiente' && 'text-foreground',
+                    )}
+                    onDoubleClick={() => {
+                      setEditing({ kind: 'topic', id: t.id })
+                      setEditTitle(t.title)
+                    }}
+                  >
+                    {t.title}
+                  </span>
+                )}
+                {renderCitationChips(t.id)}
               </div>
 
-              <span
-                className={cn(
-                  'shrink-0 size-2 rounded-full',
-                  t.status === 'dominado' && 'bg-green-500',
-                  t.status === 'visto' && 'bg-blue-400',
-                  t.status === 'pendiente' && 'bg-muted-foreground/25',
-                )}
-              />
-
-              {editing?.kind === 'topic' && editing.id === t.id ? (
-                <input
-                  autoFocus
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  onBlur={commitEdit}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') commitEdit()
-                    if (e.key === 'Escape') setEditing(null)
-                  }}
-                  className="flex-1 min-w-0 bg-transparent text-sm outline-none border-b border-primary/40 py-0.5"
-                />
-              ) : (
-                <span
-                  className="flex-1 min-w-0 text-sm truncate cursor-text"
-                  onDoubleClick={() => {
-                    setEditing({ kind: 'topic', id: t.id })
-                    setEditTitle(t.title)
-                  }}
-                >
-                  {t.title}
-                </span>
-              )}
-
-              <select
-                value={t.status}
-                onChange={(e) => handleStatusChange(t, e.target.value as FacultyTopicStatus)}
-                className={cn(
-                  'shrink-0 h-6 rounded border border-border/60 bg-card/40 px-1.5 text-[11px] outline-none focus:border-primary/40 transition-colors',
-                  t.status === 'dominado' && 'text-green-600',
-                  t.status === 'visto' && 'text-blue-500',
-                  t.status === 'pendiente' && 'text-muted-foreground',
-                )}
-              >
-                {STATUS_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-
-              <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover/topic:opacity-100 transition-opacity">
+              {/* Actions — hover reveal */}
+              <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover/topic:opacity-100 transition-opacity mt-0.5">
                 <button
                   type="button"
                   onClick={() => setPickerTopicId(t.id)}
                   title="Citar recurso"
-                  className="flex items-center gap-1 h-6 px-1.5 rounded text-[10px] text-muted-foreground/50 hover:text-primary hover:bg-primary/10 transition-colors"
+                  className="flex items-center justify-center size-5 rounded text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors"
                 >
                   <Link2 className="size-3" />
                 </button>
@@ -456,7 +467,7 @@ export function TopicList({
                   <AlertDialogTrigger asChild>
                     <button
                       type="button"
-                      className="flex items-center justify-center size-6 rounded text-muted-foreground/50 hover:text-destructive hover:bg-secondary transition-colors"
+                      className="flex items-center justify-center size-5 rounded text-muted-foreground/40 hover:text-destructive hover:bg-secondary transition-colors"
                     >
                       <Trash2 className="size-3" />
                     </button>
@@ -479,8 +490,6 @@ export function TopicList({
                 </AlertDialog>
               </div>
             </div>
-
-            {renderCitationChips(t.id)}
           </li>
         ))}
       </ul>
@@ -565,6 +574,40 @@ export function TopicList({
         </div>
       )}
 
+      {topics.length > 0 && (
+        <div className="flex gap-1 flex-wrap">
+          {(
+            [
+              { value: 'all', label: 'Todo' },
+              { value: 'pendiente', label: 'Pendiente' },
+              { value: 'visto', label: 'Visto' },
+              { value: 'dominado', label: 'Dominado' },
+            ] as const
+          ).map((f) => {
+            const count =
+              f.value === 'all'
+                ? topics.length
+                : topics.filter((t) => t.status === f.value).length
+            return (
+              <button
+                key={f.value}
+                type="button"
+                onClick={() => setFilterStatus(f.value)}
+                className={cn(
+                  'h-6 px-2.5 rounded-full text-[11px] transition-colors',
+                  filterStatus === f.value
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-secondary/60 text-muted-foreground hover:bg-secondary hover:text-foreground',
+                )}
+              >
+                {f.label}{' '}
+                <span className="opacity-60 tabular-nums">{count}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {/* Groups */}
       {sortedGroups.map((group, gi) => {
         const gUnits = [...units]
@@ -574,10 +617,15 @@ export function TopicList({
         const gDominado = gTopics.filter((t) => t.status === 'dominado').length
         const isCollapsed = collapsedGroups.has(group.id)
 
+        if (filterStatus !== 'all' && applyFilter(gTopics).length === 0) return null
+
+        const accent = GROUP_ACCENTS[gi % GROUP_ACCENTS.length]
+        const gPct = gTopics.length > 0 ? Math.round((gDominado / gTopics.length) * 100) : 0
+
         return (
-          <div key={group.id} className="rounded-lg border border-border/60 bg-card/20 overflow-hidden">
+          <div key={group.id} className={cn('rounded-lg border border-border/50 border-l-4 overflow-hidden', accent.border)}>
             {/* Group header */}
-            <div className="flex items-center gap-2 px-3 py-2 bg-card/40 border-b border-border/40">
+            <div className={cn('flex items-center gap-2 px-4 py-3 border-b border-border/30', accent.bg)}>
               <button
                 type="button"
                 onClick={() =>
@@ -588,10 +636,10 @@ export function TopicList({
                     return next
                   })
                 }
-                className="text-muted-foreground/60 hover:text-muted-foreground transition-colors shrink-0"
+                className="text-muted-foreground/50 hover:text-muted-foreground transition-colors shrink-0"
               >
-                <ChevronRight
-                  className={cn('size-3.5 transition-transform', !isCollapsed && 'rotate-90')}
+                <ChevronDown
+                  className={cn('size-4 transition-transform duration-200', isCollapsed && '-rotate-90')}
                 />
               </button>
 
@@ -619,8 +667,19 @@ export function TopicList({
                 </span>
               )}
 
+              {group.deadline_id && (() => {
+                const linked = deadlines.find((d) => d.id === group.deadline_id)
+                return linked ? <CountdownBadge dueAt={linked.due_at} done={linked.done} /> : null
+              })()}
+
               {gTopics.length > 0 && (
-                <MiniProgress dominado={gDominado} total={gTopics.length} />
+                <div className="flex items-center gap-2.5 shrink-0 ml-auto">
+                  <div className="text-right hidden sm:block">
+                    <p className="text-xs font-semibold tabular-nums text-foreground/80">{gPct}%</p>
+                    <p className="text-[10px] text-muted-foreground tabular-nums">{gDominado}/{gTopics.length} dominados</p>
+                  </div>
+                  <DonutRing mastered={gDominado} total={gTopics.length} color={accent.color} />
+                </div>
               )}
 
               {/* Deadline link selector */}
@@ -628,7 +687,7 @@ export function TopicList({
                 <select
                   value={group.deadline_id ?? ''}
                   onChange={(e) => handleLinkDeadline(group, e.target.value || null)}
-                  className="shrink-0 h-6 rounded border border-border/60 bg-card/40 px-1.5 text-[11px] outline-none focus:border-primary/40 transition-colors text-muted-foreground max-w-[130px]"
+                  className="shrink-0 h-6 rounded border border-border/60 bg-card/40 px-1.5 text-[11px] outline-none focus:border-primary/40 transition-colors text-muted-foreground max-w-[110px]"
                   title="Vincular a examen"
                 >
                   <option value="">Sin examen</option>
@@ -637,10 +696,6 @@ export function TopicList({
                   ))}
                 </select>
               )}
-              {group.deadline_id && (() => {
-                const linked = deadlines.find((d) => d.id === group.deadline_id)
-                return linked ? <CountdownBadge dueAt={linked.due_at} done={linked.done} /> : null
-              })()}
 
               <div className="flex flex-col shrink-0">
                 <button
@@ -697,6 +752,8 @@ export function TopicList({
                   const uTopics = topics
                     .filter((t) => t.unit_id === unit.id)
                     .sort((a, b) => a.order_index - b.order_index)
+                  const filteredUTopics = applyFilter(uTopics)
+                  if (filterStatus !== 'all' && filteredUTopics.length === 0) return null
                   const uDominado = uTopics.filter((t) => t.status === 'dominado').length
                   const isUnitCollapsed = collapsedUnits.has(unit.id)
 
@@ -752,7 +809,17 @@ export function TopicList({
                         )}
 
                         {uTopics.length > 0 && (
-                          <MiniProgress dominado={uDominado} total={uTopics.length} />
+                          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                            <div className="w-14 h-1 rounded-full bg-secondary overflow-hidden">
+                              <div
+                                className="h-1 rounded-full bg-primary/50 transition-all duration-500"
+                                style={{ width: `${Math.round((uDominado / uTopics.length) * 100)}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-muted-foreground tabular-nums whitespace-nowrap">
+                              {uDominado}/{uTopics.length}
+                            </span>
+                          </div>
                         )}
 
                         <div className="flex flex-col shrink-0">
@@ -806,8 +873,8 @@ export function TopicList({
                       {/* Unit topics */}
                       {!isUnitCollapsed && (
                         <div className="px-2.5 pt-2 pb-2.5">
-                          {renderTopicRows(uTopics)}
-                          {renderAddTopicTrigger(unit.id)}
+                          {renderTopicRows(filteredUTopics)}
+                          {filterStatus === 'all' && renderAddTopicTrigger(unit.id)}
                         </div>
                       )}
                     </div>
@@ -815,7 +882,7 @@ export function TopicList({
                 })}
 
                 {/* Add unit */}
-                {addingIn?.kind === 'unit' && addingIn.groupId === group.id ? (
+                {filterStatus === 'all' && addingIn?.kind === 'unit' && addingIn.groupId === group.id ? (
                   <form onSubmit={submitAdd} className="flex items-center gap-2">
                     <input
                       autoFocus
@@ -850,7 +917,7 @@ export function TopicList({
                       ✕
                     </button>
                   </form>
-                ) : (
+                ) : filterStatus === 'all' ? (
                   <button
                     type="button"
                     onClick={() => startAdding({ kind: 'unit', groupId: group.id })}
@@ -858,7 +925,7 @@ export function TopicList({
                   >
                     <Plus className="size-3.5" /> Agregar unidad
                   </button>
-                )}
+                ) : null}
               </div>
             )}
           </div>
@@ -866,7 +933,7 @@ export function TopicList({
       })}
 
       {/* Sin clasificar / fallback flat list */}
-      {showUnclassified && (
+      {showUnclassified && (filterStatus === 'all' || applyFilter(unclassified).length > 0) && (
         <div className="rounded-lg border border-dashed border-border/50 p-3 space-y-2">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground/50">
             {sortedGroups.length === 0 ? 'Temas' : 'Sin clasificar'}
@@ -874,13 +941,13 @@ export function TopicList({
               <span className="ml-1 normal-case tracking-normal">({unclassified.length})</span>
             )}
           </p>
-          {renderTopicRows(unclassified)}
-          {renderAddTopicTrigger(null)}
+          {renderTopicRows(applyFilter(unclassified))}
+          {filterStatus === 'all' && renderAddTopicTrigger(null)}
         </div>
       )}
 
       {/* Add group */}
-      {addingIn?.kind === 'group' ? (
+      {filterStatus === 'all' && addingIn?.kind === 'group' ? (
         <form onSubmit={submitAdd} className="flex items-center gap-2">
           <input
             autoFocus
@@ -915,7 +982,7 @@ export function TopicList({
             ✕
           </button>
         </form>
-      ) : (
+      ) : filterStatus === 'all' ? (
         <button
           type="button"
           onClick={() => startAdding({ kind: 'group' })}
@@ -923,7 +990,7 @@ export function TopicList({
         >
           <Plus className="size-3.5" /> Agregar grupo
         </button>
-      )}
+      ) : null}
 
       {/* Citation picker dialog */}
       <TopicCitationPicker
