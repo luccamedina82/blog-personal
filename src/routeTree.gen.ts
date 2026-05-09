@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as EnglishRouteImport } from './routes/english'
 import { Route as DevlabRouteImport } from './routes/devlab'
@@ -25,6 +26,11 @@ import { Route as EnglishBooksRouteImport } from './routes/english/books'
 import { Route as EnglishAnkiRouteImport } from './routes/english/anki'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -107,6 +113,7 @@ export interface FileRoutesByFullPath {
   '/devlab': typeof DevlabRoute
   '/english': typeof EnglishRouteWithChildren
   '/login': typeof LoginRoute
+  '/profile': typeof ProfileRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/english/anki': typeof EnglishAnkiRoute
   '/english/books': typeof EnglishBooksRoute
@@ -123,6 +130,7 @@ export interface FileRoutesByTo {
   '/bitacora': typeof BitacoraRoute
   '/devlab': typeof DevlabRoute
   '/login': typeof LoginRoute
+  '/profile': typeof ProfileRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/english/anki': typeof EnglishAnkiRoute
   '/english/books': typeof EnglishBooksRoute
@@ -141,6 +149,7 @@ export interface FileRoutesById {
   '/devlab': typeof DevlabRoute
   '/english': typeof EnglishRouteWithChildren
   '/login': typeof LoginRoute
+  '/profile': typeof ProfileRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/english/anki': typeof EnglishAnkiRoute
   '/english/books': typeof EnglishBooksRoute
@@ -160,6 +169,7 @@ export interface FileRouteTypes {
     | '/devlab'
     | '/english'
     | '/login'
+    | '/profile'
     | '/auth/callback'
     | '/english/anki'
     | '/english/books'
@@ -176,6 +186,7 @@ export interface FileRouteTypes {
     | '/bitacora'
     | '/devlab'
     | '/login'
+    | '/profile'
     | '/auth/callback'
     | '/english/anki'
     | '/english/books'
@@ -193,6 +204,7 @@ export interface FileRouteTypes {
     | '/devlab'
     | '/english'
     | '/login'
+    | '/profile'
     | '/auth/callback'
     | '/english/anki'
     | '/english/books'
@@ -211,6 +223,7 @@ export interface RootRouteChildren {
   DevlabRoute: typeof DevlabRoute
   EnglishRoute: typeof EnglishRouteWithChildren
   LoginRoute: typeof LoginRoute
+  ProfileRoute: typeof ProfileRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   FacultySubjectIdRoute: typeof FacultySubjectIdRoute
   FacultyIndexRoute: typeof FacultyIndexRoute
@@ -219,6 +232,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -354,6 +374,7 @@ const rootRouteChildren: RootRouteChildren = {
   DevlabRoute: DevlabRoute,
   EnglishRoute: EnglishRouteWithChildren,
   LoginRoute: LoginRoute,
+  ProfileRoute: ProfileRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   FacultySubjectIdRoute: FacultySubjectIdRoute,
   FacultyIndexRoute: FacultyIndexRoute,

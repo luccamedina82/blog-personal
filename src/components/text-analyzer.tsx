@@ -7,7 +7,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { Button } from '@/components/ui/button'
-import { Sparkles, Loader2 } from 'lucide-react'
+import { Sparkles, Loader2, AlertCircle } from 'lucide-react'
 import { createEvaluatorRun } from '@/lib/english/queries'
 import type { EvaluatorRun } from '@/lib/english/types'
 import type { SourceMode } from '@/components/english/evaluator/source-picker'
@@ -15,10 +15,18 @@ import type { SourceMode } from '@/components/english/evaluator/source-picker'
 type Score = {
   metric: string
   value: number
-  description: string
+  feedback: string
 }
 
-function analyze(text: string): Score[] {
+type AnalysisResult = {
+  scores: Score[]
+  overall: number
+  suggestions: string[]
+  isAI: boolean
+}
+
+// Heuristic fallback — runs client-side if API is unavailable
+function analyzeHeuristic(text: string): AnalysisResult {
   const words = text.trim().split(/\s+/).filter(Boolean)
   const wc = Math.max(1, words.length)
   const avgLen = words.reduce((a, w) => a + w.length, 0) / wc
@@ -31,41 +39,43 @@ function analyze(text: string): Score[] {
   let h = 0
   for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) | 0
   const seed = Math.abs(h % 100) / 100
-
   const clamp = (n: number) => Math.max(40, Math.min(98, Math.round(n)))
 
-  return [
+  const scores: Score[] = [
     {
       metric: 'Formality',
       value: clamp(55 + longWords * 200 + connectors * 80 + seed * 10),
-      description: 'Register and word choice on a casual–academic spectrum.',
+      feedback: 'Register and word choice on a casual–academic spectrum.',
     },
     {
       metric: 'Naturalness',
       value: clamp(60 + (avgLen < 6 ? 15 : 5) + (1 - longWords) * 25 + seed * 8),
-      description: 'How closely the prose mirrors fluent everyday English.',
+      feedback: 'How closely the prose mirrors fluent everyday English.',
     },
     {
       metric: 'Nativeness',
       value: clamp(50 + (1 - Math.abs(avgLen - 4.7) / 4.7) * 40 + seed * 12),
-      description: 'Idiomatic phrasing patterns typical of native speakers.',
+      feedback: 'Idiomatic phrasing patterns typical of native speakers.',
     },
     {
       metric: 'Complexity',
       value: clamp(45 + longWords * 180 + Math.min(40, text.trim().length / 20) + seed * 5),
-      description: 'Lexical and syntactic difficulty of the passage.',
+      feedback: 'Lexical and syntactic difficulty of the passage.',
     },
     {
       metric: 'Cohesion',
       value: clamp(50 + connectors * 220 + punctuation * 60 + seed * 7),
-      description: 'Use of connectors and reference chains across sentences.',
+      feedback: 'Use of connectors and reference chains across sentences.',
     },
     {
       metric: 'Coherence',
       value: clamp(58 + connectors * 100 + (1 - longWords) * 30 + seed * 6),
-      description: 'Logical progression of ideas at the paragraph level.',
+      feedback: 'Logical progression of ideas at the paragraph level.',
     },
   ]
+
+  const overall = Math.round(scores.reduce((a, s) => a + s.value, 0) / scores.length)
+  return { scores, overall, suggestions: [], isAI: false }
 }
 
 const DEFAULT_TEXT =
@@ -86,8 +96,9 @@ export function TextAnalyzer({
 }: TextAnalyzerProps) {
   'use no memo'
   const [text, setText] = useState(initialText ?? DEFAULT_TEXT)
-  const [result, setResult] = useState<Score[] | null>(null)
+  const [result, setResult] = useState<AnalysisResult | null>(null)
   const [loading, setLoading] = useState(false)
+  const [aiError, setAiError] = useState(false)
 
   useEffect(() => {
     if (initialText !== undefined) setText(initialText)
@@ -96,9 +107,29 @@ export function TextAnalyzer({
   const handleAnalyze = async () => {
     if (!text.trim()) return
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 700))
-    const scores = analyze(text)
-    setResult(scores)
+    setAiError(false)
+
+    let analysis: AnalysisResult
+
+    try {
+      const res = await fetch('/api/ai/evaluate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      })
+      if (!res.ok) throw new Error(`status ${res.status}`)
+      const data = await res.json() as {
+        scores: Array<{ metric: string; value: number; feedback: string }>
+        overall: number
+        suggestions: string[]
+      }
+      analysis = { ...data, isAI: true }
+    } catch {
+      setAiError(true)
+      analysis = analyzeHeuristic(text)
+    }
+
+    setResult(analysis)
     setLoading(false)
 
     try {
@@ -106,7 +137,7 @@ export function TextAnalyzer({
         source,
         source_ref: sourceRef,
         input_text: text,
-        scores: scores.map((s) => ({ metric: s.metric, value: s.value })),
+        scores: analysis.scores.map((s) => ({ metric: s.metric, value: s.value, feedback: s.feedback })),
       })
       onSaved?.(run)
     } catch {
@@ -114,12 +145,8 @@ export function TextAnalyzer({
     }
   }
 
-  const overall = result
-    ? Math.round(result.reduce((a, s) => a + s.value, 0) / result.length)
-    : null
-
   const chartData =
-    result?.map((s) => ({ metric: s.metric, value: s.value })) ?? [
+    result?.scores.map((s) => ({ metric: s.metric, value: s.value })) ?? [
       { metric: 'Formality', value: 0 },
       { metric: 'Naturalness', value: 0 },
       { metric: 'Nativeness', value: 0 },
@@ -134,14 +161,26 @@ export function TextAnalyzer({
         <div className="flex items-center gap-2">
           <Sparkles className="size-3.5 text-primary" />
           <h3 className="text-sm font-medium">AI Evaluator Agent</h3>
-          <span className="text-[10px] text-muted-foreground/70 px-1.5 py-0.5 rounded border border-border/60">
-            simulated
-          </span>
+          {result && (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
+              result.isAI
+                ? 'text-primary/80 border-primary/30 bg-primary/5'
+                : 'text-muted-foreground/70 border-border/60'
+            }`}>
+              {result.isAI ? 'llama-3.3-70b' : 'simulated'}
+            </span>
+          )}
+          {aiError && (
+            <span className="flex items-center gap-1 text-[10px] text-amber-500/80">
+              <AlertCircle className="size-3" />
+              AI unavailable — using heuristic
+            </span>
+          )}
         </div>
-        {overall !== null && (
+        {result && (
           <div className="flex items-center gap-2 text-xs">
             <span className="text-muted-foreground">Overall</span>
-            <span className="font-mono tabular-nums text-primary">{overall}</span>
+            <span className="font-mono tabular-nums text-primary">{result.overall}</span>
             <span className="text-muted-foreground/60">/ 100</span>
           </div>
         )}
@@ -226,29 +265,47 @@ export function TextAnalyzer({
 
       {/* Metric breakdown */}
       {result && (
-        <div className="grid grid-cols-2 md:grid-cols-3 border-t border-border/70 divide-x divide-y md:divide-y-0 divide-border/70">
-          {result.map((s) => (
-            <div key={s.metric} className="p-4">
-              <div className="flex items-baseline justify-between">
-                <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                  {s.metric}
-                </span>
-                <span className="font-mono text-sm tabular-nums text-foreground">
-                  {s.value}
-                </span>
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 border-t border-border/70 divide-x divide-y md:divide-y-0 divide-border/70">
+            {result.scores.map((s) => (
+              <div key={s.metric} className="p-4">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                    {s.metric}
+                  </span>
+                  <span className="font-mono text-sm tabular-nums text-foreground">
+                    {s.value}
+                  </span>
+                </div>
+                <div className="mt-2 h-1 rounded-full bg-secondary overflow-hidden">
+                  <div
+                    className="h-full bg-primary/80 transition-all duration-700"
+                    style={{ width: `${s.value}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground/90 leading-relaxed">
+                  {s.feedback}
+                </p>
               </div>
-              <div className="mt-2 h-1 rounded-full bg-secondary overflow-hidden">
-                <div
-                  className="h-full bg-primary/80 transition-all duration-700"
-                  style={{ width: `${s.value}%` }}
-                />
-              </div>
-              <p className="mt-2 text-[11px] text-muted-foreground/90 leading-relaxed">
-                {s.description}
+            ))}
+          </div>
+
+          {result.isAI && result.suggestions.length > 0 && (
+            <div className="border-t border-border/70 p-5">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-3">
+                Suggestions
               </p>
+              <ul className="space-y-2">
+                {result.suggestions.map((s, i) => (
+                  <li key={i} className="flex gap-2.5 text-sm text-muted-foreground leading-relaxed">
+                    <span className="text-primary/60 font-mono text-[11px] mt-0.5 shrink-0">{i + 1}.</span>
+                    {s}
+                  </li>
+                ))}
+              </ul>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
     </div>
   )

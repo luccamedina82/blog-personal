@@ -1,8 +1,11 @@
 import { cn } from '@/lib/utils'
 import { Link, useRouterState } from '@tanstack/react-router'
-import { Home, Code2, BookOpen, NotebookPen, GraduationCap, Library } from 'lucide-react'
+import { Home, Code2, BookOpen, NotebookPen, GraduationCap, Library, Settings } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { GithubLogo, LinkedinLogo, TwitterLogo } from '@phosphor-icons/react'
+import { useEffect, useState } from 'react'
+import { useAuth } from '@/lib/auth'
+import { getProfile, type Profile } from '@/lib/profile'
 
 type SectionId = 'home' | 'devlab' | 'faculty' | 'library' | 'english' | 'journal'
 
@@ -15,8 +18,19 @@ const NAV: { id: SectionId; label: string; sub: string; icon: LucideIcon; to: st
   { id: 'journal', label: 'Bitácora', sub: 'Daily Log', icon: NotebookPen, to: '/bitacora' },
 ]
 
+function useProfile() {
+  const { user } = useAuth()
+  const [profile, setProfile] = useState<Profile | null>(null)
+  useEffect(() => {
+    if (!user) return
+    getProfile(user.id).then(setProfile)
+  }, [user])
+  return profile
+}
+
 export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const profile = useProfile()
 
   return (
     <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r border-border bg-sidebar h-screen sticky top-0">
@@ -24,10 +38,14 @@ export function AppSidebar() {
       <div className="px-6 pt-8 pb-10">
         <div className="flex items-center gap-2.5">
           <div className="size-7 rounded-md bg-foreground/95 flex items-center justify-center">
-            <span className="text-background text-xs font-semibold tracking-tight">G</span>
+            <span className="text-background text-xs font-semibold tracking-tight">
+              {profile?.display_name?.[0]?.toUpperCase() ?? '?'}
+            </span>
           </div>
           <div className="flex flex-col leading-tight">
-            <span className="text-sm font-medium text-foreground">Guillermo R.</span>
+            <span className="text-sm font-medium text-foreground">
+              {profile?.display_name ?? 'Personal'}
+            </span>
             <span className="text-[11px] text-muted-foreground tracking-wide">personal · v1.0</span>
           </div>
         </div>
@@ -90,18 +108,28 @@ export function AppSidebar() {
       {/* Footer */}
       <div className="px-6 py-5 border-t border-border/70">
         <div className="flex items-center gap-3">
-          <a href="#" aria-label="GitHub" className="text-muted-foreground hover:text-foreground transition-colors">
-            <GithubLogo className="size-4" />
-          </a>
-          <a href="#" aria-label="LinkedIn" className="text-muted-foreground hover:text-foreground transition-colors">
-            <LinkedinLogo className="size-4" />
-          </a>
-          <a href="#" aria-label="Twitter" className="text-muted-foreground hover:text-foreground transition-colors">
-            <TwitterLogo className="size-4" />
-          </a>
-          <span className="ml-auto text-[10px] text-muted-foreground/70 tabular-nums">
-            UTC−05
-          </span>
+          {profile?.github_url && (
+            <a href={profile.github_url} target="_blank" rel="noopener noreferrer" aria-label="GitHub" className="text-muted-foreground hover:text-foreground transition-colors">
+              <GithubLogo className="size-4" />
+            </a>
+          )}
+          {profile?.linkedin_url && (
+            <a href={profile.linkedin_url} target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" className="text-muted-foreground hover:text-foreground transition-colors">
+              <LinkedinLogo className="size-4" />
+            </a>
+          )}
+          {profile?.twitter_url && (
+            <a href={profile.twitter_url} target="_blank" rel="noopener noreferrer" aria-label="Twitter" className="text-muted-foreground hover:text-foreground transition-colors">
+              <TwitterLogo className="size-4" />
+            </a>
+          )}
+          <Link
+            to="/profile"
+            aria-label="Profile settings"
+            className="ml-auto text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Settings className="size-3.5" />
+          </Link>
         </div>
       </div>
     </aside>

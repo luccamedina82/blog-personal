@@ -40,7 +40,7 @@ export type EvaluatorRun = {
   source: 'paste' | 'devlab' | 'bitacora'
   source_ref: string | null
   input_text: string
-  scores: Array<{ metric: string; value: number }>
+  scores: Array<{ metric: string; value: number; feedback?: string }>
   created_at: string
 }
 
