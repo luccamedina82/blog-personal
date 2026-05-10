@@ -664,3 +664,6 @@ pnpm dlx supabase gen types typescript --linked > src/lib/database.types.ts
 3. **12c Anki cards** — ya hay schema `Card`/`Deck`, reusa pipeline evaluator.
 4. **12d Quiz** — más pesado (3 tablas, 2 componentes nuevos, Gemini SDK).
 5. §1b (script SQL kind→deadlines) cuando convenga.
+
+
+

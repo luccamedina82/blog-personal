@@ -144,7 +144,7 @@ export function TextAnalyzer({
         source,
         source_ref: sourceRef,
         title: autoTitle,
-        source_title: sourceTitle ?? null,
+        source_title: sourceTitle,
         input_text: text,
         scores: analysis.scores.map((s) => ({ metric: s.metric, value: s.value, feedback: s.feedback })),
         suggestions: analysis.suggestions,
