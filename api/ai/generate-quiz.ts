@@ -73,42 +73,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const count = Math.min(Math.max(Number(body.count) || 8, 3), 20)
   const prompt = quizPrompt(body.notes, body.quizType, count)
 
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' })
+  const apiKey = process.env.GROQ_API_KEY
+  if (!apiKey) return res.status(500).json({ error: 'GROQ_API_KEY not configured' })
 
-  const geminiRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature: 0.4,
-          maxOutputTokens: 4096,
-        },
-      }),
+  const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
     },
-  )
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+      temperature: 0.4,
+      max_tokens: 4096,
+    }),
+  })
 
-  if (!geminiRes.ok) {
-    const errText = await geminiRes.text().catch(() => '')
-    return res.status(502).json({ error: 'gemini_error', status: geminiRes.status, detail: errText })
+  if (!groqRes.ok) {
+    const errText = await groqRes.text().catch(() => '')
+    return res.status(502).json({ error: 'groq_error', status: groqRes.status, detail: errText })
   }
 
-  const geminiData = await geminiRes.json() as {
-    candidates?: Array<{ content: { parts: Array<{ text: string }> } }>
-    error?: { message: string }
+  const groqData = await groqRes.json() as {
+    choices: Array<{ message: { content: string } }>
   }
 
-  if (geminiData.error) {
-    return res.status(502).json({ error: 'gemini_error', detail: geminiData.error.message })
-  }
-
-  const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text
-  if (!text) return res.status(502).json({ error: 'empty_response' })
-
-  const result = JSON.parse(text) as { questions: GeneratedQuestion[] }
+  const result = JSON.parse(groqData.choices[0].message.content) as { questions: GeneratedQuestion[] }
   return res.json(result)
 }

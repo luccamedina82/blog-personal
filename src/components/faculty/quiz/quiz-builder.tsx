@@ -125,7 +125,7 @@ export function QuizBuilder({ open, onClose, subjectId, notes, onCreated }: Prop
         subjectId,
         title.trim(),
         selectedNotes.map((n) => n.id),
-        'gemini-2.0-flash',
+        'llama-3.3-70b-versatile',
         questions.map((q, i) => ({
           order_index: i,
           question: q.question,
