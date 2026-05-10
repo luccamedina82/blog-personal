@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Plus, Pencil, Trash2, GraduationCap } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, GraduationCap, Link2 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -11,6 +11,14 @@ import { Button } from '@/components/ui/button'
 import { CardEditor } from './card-editor'
 import { listCards, createCard, updateCard, deleteCard } from '@/lib/english/queries'
 import type { Card, Deck } from '@/lib/english/types'
+
+const SOURCE_LABEL: Record<NonNullable<Card['source_kind']>, string> = {
+  devlab: 'DevLab',
+  faculty: 'Faculty',
+  bitacora: 'Bitácora',
+  book: 'Book',
+  evaluator: 'Evaluator',
+}
 
 interface DeckViewProps {
   deck: Deck & { card_count: number }
@@ -133,8 +141,14 @@ export function DeckView({ deck, onBack, onStudy, onCardCountChange }: DeckViewP
                   key={card.id}
                   className="grid grid-cols-[1fr_1fr_auto_auto] text-[13px] hover:bg-card/60 transition-colors"
                 >
-                  <div className="px-4 py-3 font-mono text-foreground self-center line-clamp-2">
-                    {card.front}
+                  <div className="px-4 py-3 self-center">
+                    <span className="font-mono text-foreground text-[13px] line-clamp-2">{card.front}</span>
+                    {card.source_kind && (
+                      <span className="mt-1 flex items-center gap-1 text-[10px] text-primary/70">
+                        <Link2 className="size-2.5 shrink-0" />
+                        {SOURCE_LABEL[card.source_kind]}
+                      </span>
+                    )}
                   </div>
                   <div className="px-4 py-3 text-muted-foreground self-center line-clamp-2">
                     {card.back}
