@@ -21,7 +21,8 @@ history: Ver PLAN.md para fases 0–10 completas y decisiones históricas
 | **12a Setup IA** | ⚠️ Parcial | `prompts.ts` + `evaluate.ts` listos. Falta `cache.ts`, migración `0008`, deps SDK Groq/Gemini |
 | **12b Evaluator real** | ✅ Hecho con bugs | Groq llama-3.3-70b vía Edge function + fallback heurístico. Ver §3a issues |
 | **12c Anki cards** | ✅ Hecho | Groq + modal + botones Faculty/DevLab. Migración `0011` corrida. |
-| **12d–12f IA** | ❌ Pendiente | Ver §3 |
+| **12d Quiz** | ✅ Hecho | Gemini 2.0 Flash + QuizBuilder + QuizPlay + tab en materia. Migración `0012` pendiente correr. |
+| **12e–12f IA** | ❌ Pendiente | Ver §3 |
 
 **Stack:** Vite · React 19 · TanStack Router · Tailwind 4 · Supabase · Vercel · pnpm
 
@@ -550,16 +551,16 @@ export type QuizAttempt = { id: string; quiz_id: string; question_id: string
 - Historial: barras % aciertos por quiz.
 
 **Checklist:**
-- [ ] Migración `0010_quizzes.sql`
-- [ ] Tipos `Quiz`/`QuizQuestion`/`QuizAttempt`
-- [ ] `src/lib/faculty/quizzes.ts` queries
-- [ ] `quizPrompt` en `prompts.ts` (variantes por tipo)
-- [ ] `api/ai/generate-quiz.ts` (Gemini)
-- [ ] Tab "Quiz" en `/faculty/$subjectId` o ruta dedicada
-- [ ] `QuizBuilder` modal multi-select notas + preview
-- [ ] `QuizPlay` componente práctica
-- [ ] Persist intentos + score view
-- [ ] Botón "Re-jugar" + "Borrar quiz"
+- [x] Migración `0012_quizzes.sql` — ⚠️ pendiente correr en Supabase
+- [x] Tipos `Quiz`/`QuizQuestion`/`QuizAttempt`
+- [x] `src/lib/faculty/quizzes.ts` queries
+- [x] prompt inlineado en `api/ai/generate-quiz.ts`
+- [x] `api/ai/generate-quiz.ts` (Gemini 2.0 Flash)
+- [x] Tab "Quiz" en `/faculty/$subjectId`
+- [x] `QuizBuilder` modal multi-select notas + preview
+- [x] `QuizPlay` componente práctica (MC/TF/open + score)
+- [x] Persist intentos (`submitAttempts`) + score view
+- [x] Botón "Re-jugar" + "Borrar quiz"
 
 #### 12e — Tip del día dinámico
 - [ ] `api/ai/tip-of-day.ts`: Groq + cache 24h en `ai_cache`, evitar términos ya en vocab
@@ -631,7 +632,7 @@ src/components/faculty/topic-list-readonly.tsx   ← nuevo, <150 líneas
 | ✅ | `0009_evaluator_extras.sql` | Corrida |
 | 🔴 Alta | `0010_evaluator_titles.sql` | Correr en Supabase — habilita title/source_title en evaluator runs |
 | 🔴 Alta | `0011_cards_source_kind_faculty.sql` | Correr en Supabase — habilita guardar cards desde Faculty |
-| 🟡 Media | `0012_quizzes.sql` | Prerrequisito 12d (renumerado, 0010 tomado por evaluator titles) |
+| 🔴 Alta | `0012_quizzes.sql` | Correr en Supabase — habilita quizzes (12d) |
 | 🟢 Baja | Fase 9d Export PDF (`jspdf + html2canvas`) | No bloquea nada |
 | 🟢 Baja | Drag-and-drop bloques (`@dnd-kit`) | Nice-to-have, botones ▲▼ funcionan |
 | 🟢 Baja | Anki import/export `.apkg` (`genanki-js`) | Post-Fase 12 |
