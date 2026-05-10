@@ -27,9 +27,11 @@ export async function saveTip(
   tip: Omit<StoredTip, 'id' | 'user_id' | 'tip_date' | 'created_at'>,
 ): Promise<StoredTip> {
   const today = new Date().toISOString().slice(0, 10)
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
   const { data, error } = await supabase
     .from('daily_tips')
-    .insert({ ...tip, tip_date: today })
+    .insert({ ...tip, tip_date: today, user_id: user.id })
     .select()
     .single()
   if (error) throw error
