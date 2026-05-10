@@ -151,6 +151,47 @@ export async function clearEvaluatorHistory(): Promise<void> {
   if (error) throw error
 }
 
+export async function countEvaluatorRuns(): Promise<number> {
+  const { count, error } = await supabase
+    .from('evaluator_runs')
+    .select('*', { count: 'exact', head: true })
+  if (error) throw error
+  return count ?? 0
+}
+
+export async function deleteRecentEvaluatorRuns(n: number): Promise<void> {
+  const { data, error: fetchErr } = await supabase
+    .from('evaluator_runs')
+    .select('id')
+    .order('created_at', { ascending: false })
+    .limit(n)
+  if (fetchErr) throw fetchErr
+  const ids = (data ?? []).map((r: { id: string }) => r.id)
+  if (!ids.length) return
+  const { error } = await supabase.from('evaluator_runs').delete().in('id', ids)
+  if (error) throw error
+}
+
+export async function keepRecentEvaluatorRuns(n: number): Promise<void> {
+  if (n <= 0) {
+    await clearEvaluatorHistory()
+    return
+  }
+  const { data, error: fetchErr } = await supabase
+    .from('evaluator_runs')
+    .select('id')
+    .order('created_at', { ascending: false })
+    .limit(n)
+  if (fetchErr) throw fetchErr
+  const keepIds = (data ?? []).map((r: { id: string }) => r.id)
+  if (!keepIds.length) return
+  const { error } = await supabase
+    .from('evaluator_runs')
+    .delete()
+    .not('id', 'in', `(${keepIds.join(',')})`)
+  if (error) throw error
+}
+
 // ── Shadowing ──────────────────────────────────────────────────────────────
 
 export async function listShadowingSessions(): Promise<ShadowingSession[]> {

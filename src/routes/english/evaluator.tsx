@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { TextAnalyzer } from '@/components/text-analyzer'
 import { SourcePicker, type SourceMode } from '@/components/english/evaluator/source-picker'
 import { HistoryChart } from '@/components/english/evaluator/history-chart'
-import { listEvaluatorRuns, clearEvaluatorHistory } from '@/lib/english/queries'
+import { listEvaluatorRuns } from '@/lib/english/queries'
 import type { EvaluatorRun } from '@/lib/english/types'
 
 export const Route = createFileRoute('/english/evaluator')({
@@ -40,8 +40,8 @@ function EvaluatorPage() {
 
   async function handleClear() {
     try {
-      await clearEvaluatorHistory()
-      setRuns([])
+      const fresh = await listEvaluatorRuns()
+      setRuns(fresh)
     } catch {}
   }
 

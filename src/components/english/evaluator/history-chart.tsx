@@ -8,10 +8,16 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Trash2, ChevronDown, Copy, Check } from 'lucide-react'
+import { Trash2, ChevronDown, Copy, Check, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import {
+  clearEvaluatorHistory,
+  deleteRecentEvaluatorRuns,
+  keepRecentEvaluatorRuns,
+  countEvaluatorRuns,
+} from '@/lib/english/queries'
 import type { EvaluatorRun } from '@/lib/english/types'
 
 interface HistoryChartProps {
@@ -22,6 +28,51 @@ interface HistoryChartProps {
 export function HistoryChart({ runs, onClear }: HistoryChartProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  // ── Clear dialog ──────────────────────────────────────────────────────────
+  type ClearMode = 'delete-recent' | 'keep-recent' | 'delete-all'
+  const [clearOpen, setClearOpen] = useState(false)
+  const [clearMode, setClearMode] = useState<ClearMode>('delete-all')
+  const [clearN, setClearN] = useState(10)
+  const [totalCount, setTotalCount] = useState<number | null>(null)
+  const [clearing, setClearing] = useState(false)
+
+  async function openClearDialog() {
+    setClearMode('delete-all')
+    setClearN(10)
+    setClearOpen(true)
+    const count = await countEvaluatorRuns()
+    setTotalCount(count)
+  }
+
+  function deleteCount(): number {
+    const total = totalCount ?? 0
+    if (clearMode === 'delete-all') return total
+    if (clearMode === 'delete-recent') return Math.min(Math.max(clearN, 0), total)
+    if (clearMode === 'keep-recent') return Math.max(0, total - Math.max(clearN, 0))
+    return 0
+  }
+
+  function isNInvalid(): boolean {
+    if (clearMode === 'delete-all') return false
+    if (clearN < 1) return true
+    if (clearMode === 'delete-recent' && clearN > (totalCount ?? 0)) return true
+    if (clearMode === 'keep-recent' && clearN >= (totalCount ?? 0)) return true
+    return false
+  }
+
+  async function handleConfirmClear() {
+    setClearing(true)
+    try {
+      if (clearMode === 'delete-all') await clearEvaluatorHistory()
+      else if (clearMode === 'delete-recent') await deleteRecentEvaluatorRuns(clearN)
+      else await keepRecentEvaluatorRuns(clearN)
+      setClearOpen(false)
+      onClear()
+    } finally {
+      setClearing(false)
+    }
+  }
 
   function handleCopy(run: EvaluatorRun) {
     if (!run.corrected_text) return
@@ -45,28 +96,112 @@ export function HistoryChart({ runs, onClear }: HistoryChartProps) {
           <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground mb-1">History</p>
           <h3 className="text-base font-medium tracking-tight">Progress over time</h3>
         </div>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive h-8 text-xs gap-1.5">
-              <Trash2 className="size-3" />
-              Clear history
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Clear all evaluator history?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This deletes all {runs.length} saved runs permanently. This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={onClear} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                Delete all
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground hover:text-destructive h-8 text-xs gap-1.5"
+          onClick={openClearDialog}
+        >
+          <Trash2 className="size-3" />
+          Clear history
+        </Button>
+
+        <Dialog open={clearOpen} onOpenChange={setClearOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Clear evaluator history</DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4 py-1">
+              {/* Mode selector */}
+              <div className="space-y-2">
+                {(
+                  [
+                    { id: 'delete-all', label: 'Eliminar todos los registros' },
+                    { id: 'delete-recent', label: 'Eliminar los últimos N registros' },
+                    { id: 'keep-recent', label: 'Conservar solo los últimos N' },
+                  ] satisfies { id: ClearMode; label: string }[]
+                ).map((m) => (
+                  <label
+                    key={m.id}
+                    className="flex items-center gap-3 rounded-md border border-border/60 px-3 py-2.5 cursor-pointer hover:bg-secondary/40 transition-colors"
+                  >
+                    <input
+                      type="radio"
+                      name="clear-mode"
+                      value={m.id}
+                      checked={clearMode === m.id}
+                      onChange={() => setClearMode(m.id)}
+                      className="accent-primary"
+                    />
+                    <span className="text-sm">{m.label}</span>
+                  </label>
+                ))}
+              </div>
+
+              {/* N input */}
+              {clearMode !== 'delete-all' && (
+                <div className="space-y-1.5">
+                  <label className="text-[11px] text-muted-foreground uppercase tracking-wide">
+                    Cantidad de registros (N)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={totalCount ?? undefined}
+                    value={clearN}
+                    onChange={(e) => setClearN(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-full rounded-md border border-border/70 bg-background/60 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/40 transition-colors"
+                  />
+                  {isNInvalid() && totalCount !== null && (
+                    <p className="text-[11px] text-destructive">
+                      {clearMode === 'delete-recent'
+                        ? `Solo hay ${totalCount} registro${totalCount !== 1 ? 's' : ''}. N debe ser ≤ ${totalCount}.`
+                        : `N debe ser menor que ${totalCount} para eliminar algo.`}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Preview */}
+              <div className={cn(
+                'rounded-md px-3 py-2.5 text-sm',
+                deleteCount() > 0
+                  ? 'bg-destructive/8 border border-destructive/20 text-destructive'
+                  : 'bg-secondary/40 border border-border/50 text-muted-foreground',
+              )}>
+                {totalCount === null ? (
+                  <span className="flex items-center gap-2"><Loader2 className="size-3 animate-spin" />Calculando…</span>
+                ) : deleteCount() === 0 ? (
+                  'No hay registros para eliminar.'
+                ) : (
+                  <>
+                    Se eliminarán{' '}
+                    <strong>{deleteCount()}</strong>{' '}
+                    registro{deleteCount() !== 1 ? 's' : ''} de{' '}
+                    <strong>{totalCount}</strong>.
+                    {' '}Esta acción no se puede deshacer.
+                  </>
+                )}
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setClearOpen(false)} disabled={clearing}>
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={clearing || totalCount === null || deleteCount() === 0 || isNInvalid()}
+                onClick={handleConfirmClear}
+              >
+                {clearing && <Loader2 className="size-3 animate-spin" />}
+                Eliminar {deleteCount() > 0 ? deleteCount() : ''} registro{deleteCount() !== 1 ? 's' : ''}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {runs.length >= 2 ? (
