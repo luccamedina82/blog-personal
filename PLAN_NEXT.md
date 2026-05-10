@@ -464,7 +464,7 @@ src/lib/ai/
 - [x] `GenerateCardsModal` componente
 - [x] Botón en Faculty `NoteView`
 - [x] Botón en DevLab `PostView`
-- [ ] Tag de origen visible en `CardsExplorer` (badge "from: &lt;title&gt;")
+- [x] Tag de origen visible en `DeckView` (chip "from: DevLab / Faculty / …" bajo el Front)
 
 #### 12d — Quiz desde notas
 
