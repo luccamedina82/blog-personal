@@ -20,7 +20,8 @@ history: Ver PLAN.md para fases 0–10 completas y decisiones históricas
 | **Fase Personal** | ⏸ Sin número — a determinar | Ver §2 |
 | **12a Setup IA** | ⚠️ Parcial | `prompts.ts` + `evaluate.ts` listos. Falta `cache.ts`, migración `0008`, deps SDK Groq/Gemini |
 | **12b Evaluator real** | ✅ Hecho con bugs | Groq llama-3.3-70b vía Edge function + fallback heurístico. Ver §3a issues |
-| **12c–12f IA** | ❌ Pendiente | Ver §3 |
+| **12c Anki cards** | ✅ Hecho | Groq + modal + botones Faculty/DevLab. Migración `0011` corrida. |
+| **12d–12f IA** | ❌ Pendiente | Ver §3 |
 
 **Stack:** Vite · React 19 · TanStack Router · Tailwind 4 · Supabase · Vercel · pnpm
 
@@ -456,14 +457,14 @@ src/lib/ai/
 - DevLab `PostView`: mismo botón en header → `sourceKind: 'devlab'`.
 
 **Checklist:**
-- [ ] `src/lib/ai/extract.ts` con `blocksToPlainText` (reusa 3a-i)
-- [ ] `cardsPrompt` en `prompts.ts`
-- [ ] `api/ai/generate-cards.ts` (Edge, Groq)
-- [ ] `bulkInsertCards` en queries
-- [ ] `GenerateCardsModal` componente
-- [ ] Botón en Faculty `NoteView`
-- [ ] Botón en DevLab `PostView`
-- [ ] Tag de origen visible en `CardsExplorer` (badge "from: <title>")
+- [x] `src/lib/ai/extract.ts` con `blocksToPlainText` (reusa 3a-i)
+- [x] `cardsPrompt` en `prompts.ts`
+- [x] `api/ai/generate-cards.ts` (Edge, Groq)
+- [x] `bulkInsertCards` en queries
+- [x] `GenerateCardsModal` componente
+- [x] Botón en Faculty `NoteView`
+- [x] Botón en DevLab `PostView`
+- [ ] Tag de origen visible en `CardsExplorer` (badge "from: &lt;title&gt;")
 
 #### 12d — Quiz desde notas
 
@@ -627,8 +628,10 @@ src/components/faculty/topic-list-readonly.tsx   ← nuevo, <150 líneas
 | 🟡 Media | `HistoryChart` expandable: click fila → ver `suggestions` + `corrected_text` del run | `runs[i].suggestions` y `corrected_text` ya están en DB post-migración |
 | 🟡 Media | Lock re-evaluación si nota no cambió desde último run | Comparar `note.updated_at` vs `evaluator_run.created_at` donde `source_ref = note.id`; si igual, deshabilitar botón "Analyze" con tooltip "Already evaluated — edit the note first" |
 | 🟡 Media | `0008_ai_cache.sql` | Prerrequisito cache IA (12c/12d/12e) |
-| 🟡 Media | `0009_evaluator_extras.sql` | Persistir suggestions + corrected_text |
-| 🟡 Media | `0010_quizzes.sql` | Prerrequisito 12d |
+| ✅ | `0009_evaluator_extras.sql` | Corrida |
+| 🔴 Alta | `0010_evaluator_titles.sql` | Correr en Supabase — habilita title/source_title en evaluator runs |
+| 🔴 Alta | `0011_cards_source_kind_faculty.sql` | Correr en Supabase — habilita guardar cards desde Faculty |
+| 🟡 Media | `0012_quizzes.sql` | Prerrequisito 12d (renumerado, 0010 tomado por evaluator titles) |
 | 🟢 Baja | Fase 9d Export PDF (`jspdf + html2canvas`) | No bloquea nada |
 | 🟢 Baja | Drag-and-drop bloques (`@dnd-kit`) | Nice-to-have, botones ▲▼ funcionan |
 | 🟢 Baja | Anki import/export `.apkg` (`genanki-js`) | Post-Fase 12 |
