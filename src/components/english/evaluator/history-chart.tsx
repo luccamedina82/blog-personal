@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import {
   LineChart,
   Line,
@@ -10,24 +10,59 @@ import {
 } from 'recharts'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Trash2, ChevronDown, Copy, Check, Loader2 } from 'lucide-react'
+import { Trash2, ChevronDown, Copy, Check, Loader2, Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   clearEvaluatorHistory,
   deleteRecentEvaluatorRuns,
   keepRecentEvaluatorRuns,
   countEvaluatorRuns,
+  updateEvaluatorRunTitle,
 } from '@/lib/english/queries'
 import type { EvaluatorRun } from '@/lib/english/types'
 
 interface HistoryChartProps {
   runs: EvaluatorRun[]
   onClear: () => void
+  onRunUpdate: (id: string, updates: Partial<EvaluatorRun>) => void
 }
 
-export function HistoryChart({ runs, onClear }: HistoryChartProps) {
+function autoTitle(run: EvaluatorRun): string {
+  const t = run.input_text.trim()
+  return t.slice(0, 60) + (t.length > 60 ? '…' : '')
+}
+
+export function HistoryChart({ runs, onClear, onRunUpdate }: HistoryChartProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  // ── Inline title edit ─────────────────────────────────────────────────────
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingValue, setEditingValue] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  function startEdit(run: EvaluatorRun, e: React.MouseEvent) {
+    e.stopPropagation()
+    setEditingId(run.id)
+    setEditingValue(run.title ?? autoTitle(run))
+    setTimeout(() => inputRef.current?.select(), 0)
+  }
+
+  async function commitEdit(id: string) {
+    const trimmed = editingValue.trim()
+    if (trimmed) {
+      try {
+        await updateEvaluatorRunTitle(id, trimmed)
+        onRunUpdate(id, { title: trimmed })
+      } catch { /* non-blocking */ }
+    }
+    setEditingId(null)
+  }
+
+  function handleEditKeyDown(e: React.KeyboardEvent, id: string) {
+    if (e.key === 'Enter') { e.preventDefault(); void commitEdit(id) }
+    if (e.key === 'Escape') setEditingId(null)
+  }
 
   // ── Clear dialog ──────────────────────────────────────────────────────────
   type ClearMode = 'delete-recent' | 'keep-recent' | 'delete-all'
@@ -74,13 +109,16 @@ export function HistoryChart({ runs, onClear }: HistoryChartProps) {
     }
   }
 
-  function handleCopy(run: EvaluatorRun) {
+  // ── Copy corrected text ───────────────────────────────────────────────────
+  function handleCopy(run: EvaluatorRun, e: React.MouseEvent) {
+    e.stopPropagation()
     if (!run.corrected_text) return
     navigator.clipboard.writeText(run.corrected_text)
     setCopiedId(run.id)
     setTimeout(() => setCopiedId(null), 2000)
   }
 
+  // ── Chart data ────────────────────────────────────────────────────────────
   const chartData = [...runs]
     .reverse()
     .slice(-20)
@@ -113,7 +151,6 @@ export function HistoryChart({ runs, onClear }: HistoryChartProps) {
             </DialogHeader>
 
             <div className="space-y-4 py-1">
-              {/* Mode selector */}
               <div className="space-y-2">
                 {(
                   [
@@ -139,7 +176,6 @@ export function HistoryChart({ runs, onClear }: HistoryChartProps) {
                 ))}
               </div>
 
-              {/* N input */}
               {clearMode !== 'delete-all' && (
                 <div className="space-y-1.5">
                   <label className="text-[11px] text-muted-foreground uppercase tracking-wide">
@@ -163,7 +199,6 @@ export function HistoryChart({ runs, onClear }: HistoryChartProps) {
                 </div>
               )}
 
-              {/* Preview */}
               <div className={cn(
                 'rounded-md px-3 py-2.5 text-sm',
                 deleteCount() > 0
@@ -210,36 +245,14 @@ export function HistoryChart({ runs, onClear }: HistoryChartProps) {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
                 <CartesianGrid stroke="var(--border)" strokeDasharray="2 3" vertical={false} />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  domain={[40, 100]}
-                  tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
+                <XAxis dataKey="date" tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis domain={[40, 100]} tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={false} tickLine={false} />
                 <Tooltip
-                  contentStyle={{
-                    background: 'var(--card)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    color: 'var(--foreground)',
-                  }}
+                  contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', color: 'var(--foreground)' }}
                   labelStyle={{ color: 'var(--muted-foreground)', marginBottom: 4 }}
                   formatter={(val: number) => [val, 'Overall']}
                 />
-                <Line
-                  dataKey="overall"
-                  stroke="var(--primary)"
-                  strokeWidth={1.5}
-                  dot={{ fill: 'var(--primary)', r: 3, strokeWidth: 0 }}
-                  activeDot={{ r: 4 }}
-                />
+                <Line dataKey="overall" stroke="var(--primary)" strokeWidth={1.5} dot={{ fill: 'var(--primary)', r: 3, strokeWidth: 0 }} activeDot={{ r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -248,12 +261,11 @@ export function HistoryChart({ runs, onClear }: HistoryChartProps) {
         <p className="text-sm text-muted-foreground">Run 2+ analyses to see your progress chart.</p>
       )}
 
-      {/* Recent runs table */}
+      {/* Runs table */}
       <div className="rounded-lg border border-border/70 overflow-hidden bg-card/40">
-        <div className="grid grid-cols-[1fr_80px_60px_32px] text-[10px] uppercase tracking-[0.18em] text-muted-foreground bg-background/40 border-b border-border/70">
-          <div className="px-4 py-2.5">Date</div>
-          <div className="px-4 py-2.5">Source</div>
-          <div className="px-4 py-2.5 text-right">Overall</div>
+        <div className="grid grid-cols-[1fr_56px_32px] text-[10px] uppercase tracking-[0.18em] text-muted-foreground bg-background/40 border-b border-border/70">
+          <div className="px-4 py-2.5">Evaluation</div>
+          <div className="px-3 py-2.5 text-right">Score</div>
           <div />
         </div>
         <ul className="divide-y divide-border/70">
@@ -261,29 +273,75 @@ export function HistoryChart({ runs, onClear }: HistoryChartProps) {
             const overall = Math.round(run.scores.reduce((a, s) => a + s.value, 0) / run.scores.length)
             const expanded = expandedId === run.id
             const hasDetail = (run.suggestions?.length > 0) || !!run.corrected_text
+            const isEditing = editingId === run.id
+            const displayTitle = run.title ?? autoTitle(run)
 
             return (
               <li key={run.id} className="divide-y divide-border/70">
-                <button
-                  type="button"
-                  onClick={() => hasDetail && setExpandedId(expanded ? null : run.id)}
-                  className={cn(
-                    'w-full grid grid-cols-[1fr_80px_60px_32px] text-[13px] transition-colors text-left',
-                    hasDetail ? 'hover:bg-card/60 cursor-pointer' : 'cursor-default',
-                    expanded && 'bg-card/60',
-                  )}
-                >
-                  <div className="px-4 py-3 text-muted-foreground tabular-nums">
-                    {new Date(run.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}
+                <div className={cn('flex items-stretch transition-colors', expanded && 'bg-card/60')}>
+
+                  {/* Left: title + subtitle */}
+                  <div className="flex-1 min-w-0 px-4 py-3 group">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {isEditing ? (
+                        <input
+                          ref={inputRef}
+                          value={editingValue}
+                          onChange={(e) => setEditingValue(e.target.value)}
+                          onBlur={() => void commitEdit(run.id)}
+                          onKeyDown={(e) => handleEditKeyDown(e, run.id)}
+                          className="flex-1 min-w-0 text-[13px] bg-transparent border-b border-primary/50 outline-none text-foreground"
+                          autoFocus
+                        />
+                      ) : (
+                        <>
+                          <span className="text-[13px] text-foreground truncate">{displayTitle}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => startEdit(run, e)}
+                            className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground/50 hover:text-muted-foreground"
+                          >
+                            <Pencil className="size-3" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-[11px] text-muted-foreground/70 tabular-nums">
+                        {new Date(run.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}
+                      </span>
+                      {run.source_title && (
+                        <>
+                          <span className="text-muted-foreground/40">·</span>
+                          <span className="text-[11px] text-primary/70 truncate max-w-[180px]">{run.source_title}</span>
+                        </>
+                      )}
+                      {!run.source_title && run.source !== 'paste' && (
+                        <>
+                          <span className="text-muted-foreground/40">·</span>
+                          <span className="text-[11px] text-muted-foreground/60 capitalize">{run.source}</span>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div className="px-4 py-3 text-muted-foreground capitalize">{run.source}</div>
-                  <div className="px-4 py-3 text-right font-mono text-foreground">{overall}</div>
-                  <div className="flex items-center justify-center">
-                    {hasDetail && (
-                      <ChevronDown className={cn('size-3.5 text-muted-foreground/60 transition-transform', expanded && 'rotate-180')} />
+
+                  {/* Right: score + chevron (expand trigger) */}
+                  <button
+                    type="button"
+                    onClick={() => hasDetail && setExpandedId(expanded ? null : run.id)}
+                    className={cn(
+                      'flex items-center gap-2 px-3 shrink-0',
+                      hasDetail ? 'hover:bg-card/80 cursor-pointer' : 'cursor-default',
                     )}
-                  </div>
-                </button>
+                  >
+                    <span className="font-mono text-sm tabular-nums text-foreground w-8 text-right">{overall}</span>
+                    <ChevronDown className={cn(
+                      'size-3.5 transition-transform',
+                      hasDetail ? 'text-muted-foreground/60' : 'text-transparent',
+                      expanded && 'rotate-180',
+                    )} />
+                  </button>
+                </div>
 
                 {expanded && (
                   <div className="px-4 py-4 space-y-4 bg-background/30">
@@ -309,7 +367,7 @@ export function HistoryChart({ runs, onClear }: HistoryChartProps) {
                             size="sm"
                             variant="ghost"
                             className="h-6 px-2 text-[11px] text-muted-foreground gap-1.5"
-                            onClick={(e) => { e.stopPropagation(); handleCopy(run) }}
+                            onClick={(e) => handleCopy(run, e)}
                           >
                             {copiedId === run.id
                               ? <><Check className="size-3 text-green-500" />Copied</>

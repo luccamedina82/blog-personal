@@ -9,7 +9,7 @@ export type SourceMode = 'paste' | 'devlab' | 'bitacora'
 interface SourcePickerProps {
   mode: SourceMode
   onModeChange: (mode: SourceMode) => void
-  onTextLoad: (text: string, ref: string) => void
+  onTextLoad: (text: string, ref: string, sourceTitle: string) => void
 }
 
 const MODES: { id: SourceMode; label: string }[] = [
@@ -47,10 +47,13 @@ export function SourcePicker({ mode, onModeChange, onTextLoad }: SourcePickerPro
 
     if (mode === 'devlab') {
       const post = devlabPosts.find((p) => p.id === selectedId)
-      if (post) onTextLoad(blocksToPlainText(post.title, post.blocks ?? []), post.id)
+      if (post) onTextLoad(blocksToPlainText(post.title, post.blocks ?? []), post.id, post.title)
     } else if (mode === 'bitacora') {
       const post = journalPosts.find((p) => p.id === selectedId)
-      if (post?.content) onTextLoad(post.content, post.id)
+      if (post?.content) {
+        const label = post.title ?? new Date(post.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        onTextLoad(post.content, post.id, label)
+      }
     }
   }
 

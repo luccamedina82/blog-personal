@@ -134,8 +134,15 @@ export async function listEvaluatorRuns(): Promise<EvaluatorRun[]> {
   return data
 }
 
+export async function updateEvaluatorRunTitle(id: string, title: string): Promise<void> {
+  const { error } = await supabase.from('evaluator_runs').update({ title }).eq('id', id)
+  if (error) throw error
+}
+
 export async function createEvaluatorRun(
   payload: Pick<EvaluatorRun, 'source' | 'source_ref' | 'input_text' | 'scores'> & {
+    title?: string
+    source_title?: string
     suggestions?: string[]
     corrected_text?: string
   },

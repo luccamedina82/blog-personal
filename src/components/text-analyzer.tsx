@@ -85,6 +85,7 @@ const DEFAULT_TEXT =
 interface TextAnalyzerProps {
   source?: SourceMode
   sourceRef?: string | null
+  sourceTitle?: string
   initialText?: string
   onSaved?: (run: EvaluatorRun) => void
 }
@@ -92,6 +93,7 @@ interface TextAnalyzerProps {
 export function TextAnalyzer({
   source = 'paste',
   sourceRef = null,
+  sourceTitle,
   initialText,
   onSaved,
 }: TextAnalyzerProps) {
@@ -136,9 +138,13 @@ export function TextAnalyzer({
     setLoading(false)
 
     try {
+      const trimmed = text.trim()
+      const autoTitle = sourceTitle ?? (trimmed.slice(0, 60) + (trimmed.length > 60 ? '…' : ''))
       const run = await createEvaluatorRun({
         source,
         source_ref: sourceRef,
+        title: autoTitle,
+        source_title: sourceTitle ?? null,
         input_text: text,
         scores: analysis.scores.map((s) => ({ metric: s.metric, value: s.value, feedback: s.feedback })),
         suggestions: analysis.suggestions,

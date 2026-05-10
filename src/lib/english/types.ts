@@ -39,6 +39,8 @@ export type EvaluatorRun = {
   user_id: string
   source: 'paste' | 'devlab' | 'bitacora'
   source_ref: string | null
+  title: string | null
+  source_title: string | null
   input_text: string
   scores: Array<{ metric: string; value: number; feedback?: string }>
   suggestions: string[]

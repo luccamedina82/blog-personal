@@ -14,6 +14,7 @@ function EvaluatorPage() {
   'use no memo'
   const [source, setSource] = useState<SourceMode>('paste')
   const [sourceRef, setSourceRef] = useState<string | null>(null)
+  const [sourceTitle, setSourceTitle] = useState<string | undefined>()
   const [externalText, setExternalText] = useState<string | undefined>()
   const [runs, setRuns] = useState<EvaluatorRun[]>([])
 
@@ -26,16 +27,22 @@ function EvaluatorPage() {
   function handleModeChange(mode: SourceMode) {
     setSource(mode)
     setSourceRef(null)
+    setSourceTitle(undefined)
     setExternalText(undefined)
   }
 
-  function handleTextLoad(text: string, ref: string) {
+  function handleTextLoad(text: string, ref: string, title: string) {
     setExternalText(text)
     setSourceRef(ref)
+    setSourceTitle(title)
   }
 
   function handleSaved(run: EvaluatorRun) {
     setRuns((prev) => [run, ...prev])
+  }
+
+  function handleRunUpdate(id: string, updates: Partial<EvaluatorRun>) {
+    setRuns((prev) => prev.map((r) => (r.id === id ? { ...r, ...updates } : r)))
   }
 
   async function handleClear() {
@@ -65,12 +72,13 @@ function EvaluatorPage() {
       <TextAnalyzer
         source={source}
         sourceRef={sourceRef}
+        sourceTitle={sourceTitle}
         initialText={externalText}
         onSaved={handleSaved}
       />
 
       {runs.length > 0 && (
-        <HistoryChart runs={runs} onClear={handleClear} />
+        <HistoryChart runs={runs} onClear={handleClear} onRunUpdate={handleRunUpdate} />
       )}
     </div>
   )
