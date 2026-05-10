@@ -1,4 +1,6 @@
-import { ArrowLeft, ArrowUpRight, CalendarDays, Eye, Link2, MapPin, Pencil, Star, Trash2 } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, CalendarDays, Eye, Link2, MapPin, Pencil, Sparkles, Star, Trash2 } from 'lucide-react'
+import { GenerateCardsModal } from '@/components/ai/generate-cards-modal'
+import { blocksToPlainText } from '@/lib/ai/extract'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { SaveToAnkiButton } from '@/components/english/anki/save-to-anki-button'
@@ -245,6 +247,7 @@ type Props = {
 export function NoteView({ note, subject, onBack, onEdit, onDelete, onBacklinkClick, onBacklinkPreview }: Props) {
   const [incomingLinks, setIncomingLinks] = useState<IncomingLink[]>([])
   const [topicCitations, setTopicCitations] = useState<TopicCitationBacklink[]>([])
+  const [showCards, setShowCards] = useState(false)
 
   useEffect(() => {
     listNotesReferencingTitle(note.title, note.id)
@@ -268,6 +271,14 @@ export function NoteView({ note, subject, onBack, onEdit, onDelete, onBacklinkCl
           {subject.name}
         </button>
         <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setShowCards(true)}
+            className="flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs text-muted-foreground hover:text-foreground border border-border/60 hover:border-border transition-colors"
+          >
+            <Sparkles className="size-3" />
+            Cards
+          </button>
           <button
             type="button"
             onClick={onEdit}
@@ -418,6 +429,14 @@ export function NoteView({ note, subject, onBack, onEdit, onDelete, onBacklinkCl
           </div>
         )}
       </article>
+
+      <GenerateCardsModal
+        open={showCards}
+        onClose={() => setShowCards(false)}
+        content={blocksToPlainText(note.title, note.blocks ?? [])}
+        sourceKind="faculty"
+        sourceRef={note.id}
+      />
     </div>
   )
 }

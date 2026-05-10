@@ -330,6 +330,26 @@ export async function listJournalPostsForEvaluator() {
   return data as Array<{ id: string; title: string | null; content: string; created_at: string }>
 }
 
+export async function bulkInsertCards(
+  deckId: string,
+  cards: Array<{ front: string; back: string; tags: string[] }>,
+  sourceKind: Card['source_kind'],
+  sourceRef: string | null,
+): Promise<void> {
+  const user_id = await getUid()
+  const rows = cards.map((c) => ({
+    deck_id: deckId,
+    user_id,
+    front: c.front,
+    back: c.back,
+    tags: c.tags,
+    source_kind: sourceKind,
+    source_ref: sourceRef,
+  }))
+  const { error } = await supabase.from('cards').insert(rows)
+  if (error) throw error
+}
+
 // ── Storage ────────────────────────────────────────────────────────────────
 
 export async function uploadShadowingFile(file: File): Promise<string> {

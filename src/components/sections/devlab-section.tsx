@@ -24,8 +24,10 @@ import {
 import { toast } from 'sonner'
 import {
   ArrowLeft, Clock, CalendarDays, ChevronRight, BookOpen,
-  Plus, Pencil, Trash2, Loader2, Bookmark, X, ExternalLink,
+  Plus, Pencil, Trash2, Loader2, Bookmark, X, ExternalLink, Sparkles,
 } from 'lucide-react'
+import { GenerateCardsModal } from '@/components/ai/generate-cards-modal'
+import { blocksToPlainText } from '@/lib/ai/extract'
 import {
   listDevLabCategories, createDevLabCategory, updateDevLabCategory, deleteDevLabCategory,
   listDevLabPosts, createDevLabPost, updateDevLabPost, deleteDevLabPost,
@@ -315,6 +317,7 @@ function PostView({
   onBacklinkClick?: (title: string) => void
   onBacklinkPreview?: (title: string) => void
 }) {
+  const [showCards, setShowCards] = useState(false)
   return (
     <div className="flex flex-col min-h-full">
       {/* Sticky nav bar */}
@@ -325,6 +328,11 @@ function PostView({
           {category.label}
         </button>
         <div className="flex items-center gap-1">
+          <button type="button" onClick={() => setShowCards(true)}
+            className="flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs text-muted-foreground hover:text-foreground border border-border/60 hover:border-border transition-colors">
+            <Sparkles className="size-3" />
+            Cards
+          </button>
           <button type="button" onClick={onEdit}
             className="flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs text-muted-foreground hover:text-foreground border border-border/60 hover:border-border transition-colors">
             <Pencil className="size-3" />
@@ -409,6 +417,14 @@ function PostView({
           )}
         </section>
       </article>
+
+      <GenerateCardsModal
+        open={showCards}
+        onClose={() => setShowCards(false)}
+        content={blocksToPlainText(post.title, post.blocks ?? [])}
+        sourceKind="devlab"
+        sourceRef={post.id}
+      />
     </div>
   )
 }
