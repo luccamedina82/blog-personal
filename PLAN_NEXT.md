@@ -1,7 +1,7 @@
----
+  ---
 title: Plan Fases 11–12 — Personal + IA Gratuita
 status: active
-date: 2026-05-08
+date: 2026-05-10
 scope: Pendientes Fase 10, Fase 11 (Personal), Fase 12 (IA free tier)
 history: Ver PLAN.md para fases 0–10 completas y decisiones históricas
 ---
@@ -18,7 +18,9 @@ history: Ver PLAN.md para fases 0–10 completas y decisiones históricas
 | 10g english↔library | ❌ Pendiente | Ver §1a |
 | 10h (menores) | ⚠️ Parcial | Ver §1b |
 | **Fase Personal** | ⏸ Sin número — a determinar | Ver §2 |
-| **12 IA** | 🔄 Rediseñada | Free tier — Ver §3 |
+| **12a Setup IA** | ⚠️ Parcial | `prompts.ts` + `evaluate.ts` listos. Falta `cache.ts`, migración `0008`, deps SDK Groq/Gemini |
+| **12b Evaluator real** | ✅ Hecho con bugs | Groq llama-3.3-70b vía Edge function + fallback heurístico. Ver §3a issues |
+| **12c–12f IA** | ❌ Pendiente | Ver §3 |
 
 **Stack:** Vite · React 19 · TanStack Router · Tailwind 4 · Supabase · Vercel · pnpm
 
@@ -215,6 +217,79 @@ src/components/personal/
 
 ## 3 — Fase 12: IA Gratuita
 
+### 3a — Bugs/Mejoras evaluator (post-12b)
+
+#### 3a-i — DevLab post: incluir título + bloques de texto
+
+**Problema actual:** `SourcePicker` (`source-picker.tsx:49`) sólo envía `post.excerpt` al evaluator. Pierde el título y todos los `DevLabBlock` de tipo `text` / `quote` (que son el grueso del post). Bloques `code` / `image` deben quedar fuera.
+
+**Cambios:**
+- `src/lib/english/queries.ts:260` `listDevLabPostsForEvaluator`: agregar `blocks` al SELECT.
+  ```ts
+  .select('id, title, excerpt, blocks')
+  // return type: { id; title; excerpt: string|null; blocks: DevLabBlock[] }
+  ```
+- `src/components/english/evaluator/source-picker.tsx`: nueva helper `buildEvaluatorText(post)`:
+  ```ts
+  function stripHtml(html: string) {
+    const tmp = document.createElement('div')
+    tmp.innerHTML = html
+    return tmp.textContent ?? ''
+  }
+  function buildEvaluatorText(post: { title: string; blocks: DevLabBlock[] }) {
+    const parts: string[] = [post.title]
+    for (const b of post.blocks) {
+      if (b.kind === 'text') parts.push(stripHtml(b.html))
+      else if (b.kind === 'quote') parts.push(b.content)
+      // skip code + image
+    }
+    return parts.filter(Boolean).join('\n\n').trim()
+  }
+  ```
+- En `handleSelect`: usar `buildEvaluatorText(post)` en vez de `post.excerpt`. Quitar el `disabled={!p.excerpt}` del `<option>`.
+
+#### 3a-ii — Mostrar texto corregido
+
+**Comportamiento esperado:** además de `suggestions: string[]`, el evaluator devuelve `corrected_text: string` con la versión re-escrita. UI muestra diff o panel "Tu texto / Versión sugerida".
+
+**Cambios:**
+- `src/lib/ai/prompts.ts`: extender prompt → pedir también `corrected_text` en JSON output.
+- `api/ai/evaluate.ts`: validar y reenviar `corrected_text`.
+- `src/lib/english/types.ts`: extender `EvaluatorRun.scores` queda igual; agregar campo opcional persistido (ver 3a-iii).
+- `text-analyzer.tsx`:
+  - Tipo `AnalysisResult` → agregar `corrected_text?: string`.
+  - Bajo "Suggestions" agregar bloque "Corrected version":
+    ```tsx
+    {result.corrected_text && (
+      <div className="border-t border-border/70 p-5">
+        <p className="text-[10px] uppercase ...">Corrected version</p>
+        <p className="mt-2 text-sm leading-relaxed whitespace-pre-wrap">
+          {result.corrected_text}
+        </p>
+        <Button size="sm" variant="ghost" onClick={() => navigator.clipboard.writeText(result.corrected_text!)}>
+          Copy
+        </Button>
+      </div>
+    )}
+    ```
+  - Opcional v2: diff palabra-por-palabra (`diff` lib, ~5KB) — diferir si no urge.
+
+#### 3a-iii — Persistir suggestions + corrected_text en `evaluator_runs`
+
+**Migración** `supabase/migrations/0009_evaluator_extras.sql`:
+```sql
+alter table evaluator_runs
+  add column suggestions text[] default '{}',
+  add column corrected_text text;
+```
+
+**Cambios:**
+- `EvaluatorRun` type: agregar `suggestions: string[]; corrected_text: string | null`.
+- `createEvaluatorRun` (`src/lib/english/queries.ts`): aceptar y guardar ambos campos.
+- `text-analyzer.tsx` `handleAnalyze`: pasar al insert.
+
+---
+
 ### Decisión 2026-05-08
 
 | Opción evaluada | Decisión | Motivo |
@@ -329,27 +404,161 @@ src/lib/ai/
 ### Checklist Fase 12
 
 #### 12a — Setup infraestructura
-- [ ] Agregar `GROQ_API_KEY` y `GEMINI_API_KEY` a `.env.local` y Vercel dashboard
-- [ ] `pnpm add groq-sdk @google/generative-ai`
+- [ ] **Pendiente usuario:** crear cuenta Groq → `GROQ_API_KEY` en `.env.local` + Vercel dashboard
+- [ ] **Pendiente usuario:** `GEMINI_API_KEY` (sólo si se hace 12d)
+- [ ] `pnpm add groq-sdk @google/generative-ai` (eval actual usa `fetch` directo, sin SDK)
 - [ ] Crear y correr `supabase/migrations/0008_ai_cache.sql`
 - [ ] `src/lib/ai/cache.ts` (SHA-256 via `crypto.subtle`, lookup + write)
-- [ ] `src/lib/ai/prompts.ts` (templates)
+- [x] `src/lib/ai/prompts.ts` (templates) — sólo evaluator por ahora
 
 #### 12b — Evaluator real
-- [ ] `api/ai/evaluate.ts`: Groq JSON mode → EvaluatorResult
-- [ ] `TextAnalyzer`: reemplazar heurístico por fetch `/api/ai/evaluate`
-- [ ] Mostrar `feedback` expandible por métrica
-- [ ] Fallback al heurístico si request falla (offline / rate limit)
+- [x] `api/ai/evaluate.ts`: Groq JSON mode → EvaluatorResult (Edge function)
+- [x] `TextAnalyzer`: AI primero, heurístico fallback, badge `llama-3.3-70b` / `simulated`
+- [x] Fallback al heurístico si request falla (offline / rate limit)
+- [x] `feedback` mostrado por métrica (no expandible — siempre visible bajo barra)
+- [x] **Bug §3a-i:** SourcePicker DevLab — `blocksToPlainText` en `src/lib/ai/extract.ts`
+- [x] **Mejora §3a-ii:** panel "Corrected version" + botón Copy en `text-analyzer.tsx`
+- [x] **Mejora §3a-iii:** `EvaluatorRun` type + `createEvaluatorRun` payload + migración `0009_evaluator_extras.sql` (correr en Supabase)
 
 #### 12c — Anki cards desde nota
-- [ ] `api/ai/generate-cards.ts`: Groq JSON mode → GeneratedCards
-- [ ] Botón "Generar cards con IA" en `NoteView` (Faculty) y `PostView` (DevLab)
-- [ ] Modal preview: lista cards, checkbox seleccionar, select deck → guardar en Supabase
+
+**Schema:** ya existe (`Card` + `Deck` en `src/lib/english/types.ts`). No requiere migración.
+
+**Inputs IA — extracción de texto desde `blocks` (reusa helper de 3a-i):**
+- Faculty `FacultyNote.blocks: DevLabBlock[]` (mismo tipo que DevLab)
+- DevLab `DevLabPost.blocks: DevLabBlock[]`
+- Mover `buildEvaluatorText` → `src/lib/ai/extract.ts` con nombre genérico `blocksToPlainText(title, blocks)`. Reusar en 3a-i + 12c.
+
+**Backend:** `api/ai/generate-cards.ts` (Edge function, mismo patrón que `evaluate.ts`)
+- Input: `{ title: string; content: string; deckCategory: 'vocab' | 'phrasal' | 'idioms' | 'book-quotes' | 'tech-notes'; count?: number }` (default 8 cards)
+- Prompt en `src/lib/ai/prompts.ts` → `cardsPrompt(content, deckCategory, count)`:
+  - Sistema: "You generate Anki-style flashcards. Output strict JSON. Front=concept/term, Back=definition+example. Tag with theme keywords."
+  - Variantes por `deckCategory` (vocab → palabra↔def, tech-notes → concepto↔explicación, book-quotes → quote↔reflexión).
+- Salida JSON: `{ cards: [{ front, back, tags: string[] }] }`.
+- Modelo: `llama-3.3-70b-versatile` (Groq, JSON mode).
+- Cache: SHA-256(`title|content|deckCategory|count`) — requiere `12a cache.ts` listo.
+
+**Frontend — `src/components/ai/generate-cards-modal.tsx` (~180 líneas):**
+- Props: `{ open, onOpenChange, sourceTitle, sourceContent, sourceKind: 'faculty'|'devlab', sourceRef: string }`
+- Flujo:
+  1. Select deck (`listDecks()`) — preselect by category.
+  2. Input "cantidad" (4–12, slider o select).
+  3. Botón "Generar" → `fetch('/api/ai/generate-cards')`.
+  4. Lista preview: cada card con front/back, checkbox individual, "Seleccionar todas".
+  5. Editar inline front/back antes de guardar (textarea expandible al click).
+  6. "Guardar N cards" → `bulkInsertCards(deck_id, selected, source_kind, source_ref)`.
+
+**Queries:**
+- `src/lib/english/queries.ts`: agregar `bulkInsertCards(deckId, cards, sourceKind, sourceRef)` — single INSERT.
+
+**Triggers UI:**
+- Faculty `NoteView` (buscar archivo): toolbar acción "Generar cards IA" → modal con `sourceKind: 'faculty'`.
+- DevLab `PostView`: mismo botón en header → `sourceKind: 'devlab'`.
+
+**Checklist:**
+- [ ] `src/lib/ai/extract.ts` con `blocksToPlainText` (reusa 3a-i)
+- [ ] `cardsPrompt` en `prompts.ts`
+- [ ] `api/ai/generate-cards.ts` (Edge, Groq)
+- [ ] `bulkInsertCards` en queries
+- [ ] `GenerateCardsModal` componente
+- [ ] Botón en Faculty `NoteView`
+- [ ] Botón en DevLab `PostView`
+- [ ] Tag de origen visible en `CardsExplorer` (badge "from: <title>")
 
 #### 12d — Quiz desde notas
-- [ ] Migración `0009_quizzes.sql`: tablas `quizzes` + `quiz_questions`
-- [ ] `api/ai/generate-quiz.ts`: varias notas en 1 prompt → Gemini Flash → Question[]
-- [ ] UI en `/faculty/$subjectId` tab "Quiz": seleccionar notas → generar → modo práctica
+
+> ⚠️ Renumerar a `0010_quizzes.sql` — `0009` queda tomado por evaluator extras (3a-iii).
+
+**Schema** `supabase/migrations/0010_quizzes.sql`:
+```sql
+create table quizzes (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  subject_id uuid references faculty_subjects(id) on delete set null,
+  title text not null,
+  source_note_ids uuid[] not null default '{}',
+  model text not null,
+  created_at timestamptz default now()
+);
+
+create table quiz_questions (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  quiz_id uuid not null references quizzes(id) on delete cascade,
+  order_index integer not null,
+  question text not null,
+  type text not null check (type in ('multiple_choice','true_false','open')),
+  options text[],
+  answer text not null,
+  explanation text,
+  unique (quiz_id, order_index)
+);
+
+create table quiz_attempts (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  quiz_id uuid not null references quizzes(id) on delete cascade,
+  question_id uuid not null references quiz_questions(id) on delete cascade,
+  user_answer text,
+  correct boolean,
+  created_at timestamptz default now()
+);
+
+alter table quizzes        enable row level security;
+alter table quiz_questions enable row level security;
+alter table quiz_attempts  enable row level security;
+create policy "owner_all" on quizzes        for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "owner_all" on quiz_questions for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "owner_all" on quiz_attempts  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+```
+
+**Backend** `api/ai/generate-quiz.ts` (Edge):
+- Input: `{ noteIds: string[]; subjectId: string; title: string; quizType: 'mixed'|'multiple_choice'|'true_false'|'open'; count: number }`
+- Server-side: query `faculty_notes` → concatenar `blocksToPlainText(title, blocks)` por nota, separados por `### <title>\n`.
+- Modelo: **Gemini 2.0 Flash** (1M ctx — soporta múltiples notas largas) vía `@google/generative-ai`.
+- Prompt: "Generate {count} {quizType} questions from these notes. Each question must cite the source note title in `explanation`. Output strict JSON: `{ questions: [{ question, type, options?, answer, explanation }] }`".
+- Cache: SHA-256(`noteIds.sort().join|quizType|count`) — útil al regenerar idéntico.
+
+**Tipos** — extender `src/lib/faculty/types.ts`:
+```ts
+export type Quiz = { id: string; user_id: string; subject_id: string|null
+  title: string; source_note_ids: string[]; model: string; created_at: string }
+export type QuizQuestion = { id: string; quiz_id: string; order_index: number
+  question: string; type: 'multiple_choice'|'true_false'|'open'
+  options: string[]|null; answer: string; explanation: string|null }
+export type QuizAttempt = { id: string; quiz_id: string; question_id: string
+  user_answer: string|null; correct: boolean|null; created_at: string }
+```
+
+**Queries** `src/lib/faculty/quizzes.ts`:
+- `createQuiz(payload, questions)` — INSERT quiz + bulk INSERT questions en transacción client-side (rpc o 2 calls + rollback manual).
+- `listQuizzes(subjectId?)`, `getQuiz(id)` (quiz + questions).
+- `submitAttempt(quizId, questionId, answer, correct)`.
+- `quizScore(quizId)` — aggregate.
+
+**UI** — nueva ruta `src/routes/faculty/$subjectId/quiz.tsx` (o tab dentro de `$subjectId.tsx`):
+- Vista lista quizzes existentes + botón "Nuevo quiz".
+- `QuizBuilder` modal (~200 líneas):
+  1. Multi-select notas de la materia (checklist con título + tag).
+  2. Inputs: título, cantidad (5–20), tipo.
+  3. "Generar" → `fetch('/api/ai/generate-quiz')` → preview con edición inline → guardar.
+- `QuizPlay` componente (~250 líneas):
+  - Una pregunta a la vez, navegación, timer opcional.
+  - MC/TF: radios; Open: textarea + auto-grade (string match relajado o IA en v2).
+  - Al finalizar: pantalla resultados + persist `quiz_attempts` por pregunta.
+- Historial: barras % aciertos por quiz.
+
+**Checklist:**
+- [ ] Migración `0010_quizzes.sql`
+- [ ] Tipos `Quiz`/`QuizQuestion`/`QuizAttempt`
+- [ ] `src/lib/faculty/quizzes.ts` queries
+- [ ] `quizPrompt` en `prompts.ts` (variantes por tipo)
+- [ ] `api/ai/generate-quiz.ts` (Gemini)
+- [ ] Tab "Quiz" en `/faculty/$subjectId` o ruta dedicada
+- [ ] `QuizBuilder` modal multi-select notas + preview
+- [ ] `QuizPlay` componente práctica
+- [ ] Persist intentos + score view
+- [ ] Botón "Re-jugar" + "Borrar quiz"
 
 #### 12e — Tip del día dinámico
 - [ ] `api/ai/tip-of-day.ts`: Groq + cache 24h en `ai_cache`, evitar términos ya en vocab
@@ -415,7 +624,11 @@ src/components/faculty/topic-list-readonly.tsx   ← nuevo, <150 líneas
 | 🔴 Alta | Script SQL migración notes kind→deadlines (§1b) | Datos inconsistentes hasta correrlo |
 | 🟡 Media | Fase 10g: english↔library cross-link (§1a) | 3 subtareas simples |
 | 🟡 Media | `0007_personal.sql` | Prerrequisito Fase Personal |
-| 🟡 Media | `0008_ai_cache.sql` | Prerrequisito Fase 12 |
+| 🟡 Media | `HistoryChart` expandable: click fila → ver `suggestions` + `corrected_text` del run | `runs[i].suggestions` y `corrected_text` ya están en DB post-migración |
+| 🟡 Media | Lock re-evaluación si nota no cambió desde último run | Comparar `note.updated_at` vs `evaluator_run.created_at` donde `source_ref = note.id`; si igual, deshabilitar botón "Analyze" con tooltip "Already evaluated — edit the note first" |
+| 🟡 Media | `0008_ai_cache.sql` | Prerrequisito cache IA (12c/12d/12e) |
+| 🟡 Media | `0009_evaluator_extras.sql` | Persistir suggestions + corrected_text |
+| 🟡 Media | `0010_quizzes.sql` | Prerrequisito 12d |
 | 🟢 Baja | Fase 9d Export PDF (`jspdf + html2canvas`) | No bloquea nada |
 | 🟢 Baja | Drag-and-drop bloques (`@dnd-kit`) | Nice-to-have, botones ▲▼ funcionan |
 | 🟢 Baja | Anki import/export `.apkg` (`genanki-js`) | Post-Fase 12 |
@@ -445,4 +658,9 @@ pnpm dlx supabase gen types typescript --linked > src/lib/database.types.ts
 
 ---
 
-**Próximo paso:** §1b (script SQL migración datos) → Fase 12 IA → Fase Personal (cuando se decida).
+**Próximo paso sugerido:**
+1. **Fix evaluator** (§3a-i + 3a-ii) — bug título/blocks + corrected text. Rápido, alto impacto.
+2. **Setup cache IA** (§12a `cache.ts` + `0008_ai_cache.sql`) — desbloquea 12c/12d.
+3. **12c Anki cards** — ya hay schema `Card`/`Deck`, reusa pipeline evaluator.
+4. **12d Quiz** — más pesado (3 tablas, 2 componentes nuevos, Gemini SDK).
+5. §1b (script SQL kind→deadlines) cuando convenga.

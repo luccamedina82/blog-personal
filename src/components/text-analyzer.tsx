@@ -7,7 +7,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { Button } from '@/components/ui/button'
-import { Sparkles, Loader2, AlertCircle } from 'lucide-react'
+import { Sparkles, Loader2, AlertCircle, Copy, Check } from 'lucide-react'
 import { createEvaluatorRun } from '@/lib/english/queries'
 import type { EvaluatorRun } from '@/lib/english/types'
 import type { SourceMode } from '@/components/english/evaluator/source-picker'
@@ -22,6 +22,7 @@ type AnalysisResult = {
   scores: Score[]
   overall: number
   suggestions: string[]
+  corrected_text?: string
   isAI: boolean
 }
 
@@ -99,6 +100,7 @@ export function TextAnalyzer({
   const [result, setResult] = useState<AnalysisResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [aiError, setAiError] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     if (initialText !== undefined) setText(initialText)
@@ -122,6 +124,7 @@ export function TextAnalyzer({
         scores: Array<{ metric: string; value: number; feedback: string }>
         overall: number
         suggestions: string[]
+        corrected_text?: string
       }
       analysis = { ...data, isAI: true }
     } catch {
@@ -138,6 +141,8 @@ export function TextAnalyzer({
         source_ref: sourceRef,
         input_text: text,
         scores: analysis.scores.map((s) => ({ metric: s.metric, value: s.value, feedback: s.feedback })),
+        suggestions: analysis.suggestions,
+        corrected_text: analysis.corrected_text,
       })
       onSaved?.(run)
     } catch {
@@ -303,6 +308,32 @@ export function TextAnalyzer({
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {result.isAI && result.corrected_text && (
+            <div className="border-t border-border/70 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Corrected version
+                </p>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-[11px] text-muted-foreground gap-1.5"
+                  onClick={() => {
+                    navigator.clipboard.writeText(result.corrected_text!)
+                    setCopied(true)
+                    setTimeout(() => setCopied(false), 2000)
+                  }}
+                >
+                  {copied ? <Check className="size-3 text-green-500" /> : <Copy className="size-3" />}
+                  {copied ? 'Copied' : 'Copy'}
+                </Button>
+              </div>
+              <p className="text-sm text-foreground/85 leading-relaxed whitespace-pre-wrap bg-secondary/30 rounded-md px-4 py-3">
+                {result.corrected_text}
+              </p>
             </div>
           )}
         </>

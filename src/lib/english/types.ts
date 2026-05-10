@@ -41,6 +41,8 @@ export type EvaluatorRun = {
   source_ref: string | null
   input_text: string
   scores: Array<{ metric: string; value: number; feedback?: string }>
+  suggestions: string[]
+  corrected_text: string | null
   created_at: string
 }
 

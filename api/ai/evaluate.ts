@@ -4,6 +4,7 @@ type EvaluatorResult = {
   scores: Array<{ metric: string; value: number; feedback: string }>
   overall: number
   suggestions: string[]
+  corrected_text: string
 }
 
 function evaluatorPrompt(text: string): string {
@@ -20,7 +21,8 @@ Required structure:
     { "metric": "Coherence",   "value": <0-100>, "feedback": "<1-2 sentences specific to this text>" }
   ],
   "overall": <0-100>,
-  "suggestions": ["<specific actionable improvement>", "<specific actionable improvement>", "<specific actionable improvement>"]
+  "suggestions": ["<specific actionable improvement>", "<specific actionable improvement>", "<specific actionable improvement>"],
+  "corrected_text": "<the full text rewritten with all suggestions applied — preserve the author's voice, intent, and structure>"
 }
 
 Metric definitions:
@@ -33,6 +35,7 @@ Metric definitions:
 
 overall = weighted average of the 6 scores.
 suggestions = 3 concrete, actionable improvements for THIS specific text (not generic tips).
+corrected_text = a rewrite that applies all suggestions. Keep the same meaning and roughly the same length.
 
 Text to analyze:
 """
@@ -61,7 +64,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       messages: [{ role: 'user', content: evaluatorPrompt(text) }],
       response_format: { type: 'json_object' },
       temperature: 0.3,
-      max_tokens: 1024,
+      max_tokens: 2048,
     }),
   })
 

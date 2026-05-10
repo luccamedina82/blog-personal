@@ -12,7 +12,8 @@ Required structure:
     { "metric": "Coherence",   "value": <0-100>, "feedback": "<1-2 sentences specific to this text>" }
   ],
   "overall": <0-100>,
-  "suggestions": ["<specific actionable improvement>", "<specific actionable improvement>", "<specific actionable improvement>"]
+  "suggestions": ["<specific actionable improvement>", "<specific actionable improvement>", "<specific actionable improvement>"],
+  "corrected_text": "<the full text rewritten with all suggestions applied — preserve the author's voice, intent, and structure>"
 }
 
 Metric definitions:
@@ -25,9 +26,43 @@ Metric definitions:
 
 overall = weighted average of the 6 scores.
 suggestions = 3 concrete, actionable improvements for THIS specific text (not generic tips).
+corrected_text = a rewrite that applies all suggestions. Keep the same meaning and roughly the same length.
 
 Text to analyze:
 """
 ${text}
+"""`
+}
+
+export function cardsPrompt(content: string, deckCategory: string, count: number): string {
+  const categoryHint: Record<string, string> = {
+    vocab: 'front = word/phrase, back = definition + example sentence',
+    phrasal: 'front = phrasal verb, back = meaning + usage example',
+    idioms: 'front = idiom, back = meaning + context',
+    'book-quotes': 'front = quote, back = reflection or key idea',
+    'tech-notes': 'front = concept/term, back = clear explanation + example',
+  }
+  const hint = categoryHint[deckCategory] ?? 'front = key term, back = explanation'
+
+  return `You are a flashcard expert. Generate exactly ${count} Anki-style flashcards from the content below.
+Category: ${deckCategory}. Card format: ${hint}.
+Return ONLY a valid JSON object — no markdown, no extra text.
+
+Required structure:
+{
+  "cards": [
+    { "front": "<term or question>", "back": "<answer + example>", "tags": ["<tag1>", "<tag2>"] }
+  ]
+}
+
+Rules:
+- Each card must be self-contained (no "see above" references).
+- Back side: answer first, then short example if applicable.
+- Tags: 2-4 keywords from the content (topic, level, etc.).
+- Do NOT generate cards for code snippets.
+
+Content:
+"""
+${content}
 """`
 }

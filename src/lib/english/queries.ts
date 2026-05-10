@@ -135,7 +135,10 @@ export async function listEvaluatorRuns(): Promise<EvaluatorRun[]> {
 }
 
 export async function createEvaluatorRun(
-  payload: Pick<EvaluatorRun, 'source' | 'source_ref' | 'input_text' | 'scores'>,
+  payload: Pick<EvaluatorRun, 'source' | 'source_ref' | 'input_text' | 'scores'> & {
+    suggestions?: string[]
+    corrected_text?: string
+  },
 ): Promise<EvaluatorRun> {
   const user_id = await getUid()
   const { data, error } = await supabase.from('evaluator_runs').insert({ ...payload, user_id }).select().single()
@@ -260,11 +263,11 @@ export async function listBookAnnotations(bookId: string): Promise<BookAnnotatio
 export async function listDevLabPostsForEvaluator() {
   const { data, error } = await supabase
     .from('devlab_posts')
-    .select('id, title, excerpt')
+    .select('id, title, excerpt, blocks')
     .order('created_at', { ascending: false })
     .limit(50)
   if (error) throw error
-  return data as Array<{ id: string; title: string; excerpt: string | null }>
+  return data as Array<{ id: string; title: string; excerpt: string | null; blocks: import('@/lib/devlab/types').DevLabBlock[] }>
 }
 
 export async function listJournalPostsForEvaluator() {

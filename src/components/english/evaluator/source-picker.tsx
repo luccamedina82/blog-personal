@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { listDevLabPostsForEvaluator, listJournalPostsForEvaluator } from '@/lib/english/queries'
+import { blocksToPlainText } from '@/lib/ai/extract'
 import { Loader2 } from 'lucide-react'
 
 export type SourceMode = 'paste' | 'devlab' | 'bitacora'
@@ -19,7 +20,7 @@ const MODES: { id: SourceMode; label: string }[] = [
 
 export function SourcePicker({ mode, onModeChange, onTextLoad }: SourcePickerProps) {
   'use no memo'
-  const [devlabPosts, setDevlabPosts] = useState<Array<{ id: string; title: string; excerpt: string | null }>>([])
+  const [devlabPosts, setDevlabPosts] = useState<Awaited<ReturnType<typeof listDevLabPostsForEvaluator>>>([])
   const [journalPosts, setJournalPosts] = useState<Array<{ id: string; title: string | null; content: string; created_at: string }>>([])
   const [loading, setLoading] = useState(false)
 
@@ -46,7 +47,7 @@ export function SourcePicker({ mode, onModeChange, onTextLoad }: SourcePickerPro
 
     if (mode === 'devlab') {
       const post = devlabPosts.find((p) => p.id === selectedId)
-      if (post?.excerpt) onTextLoad(post.excerpt, post.id)
+      if (post) onTextLoad(blocksToPlainText(post.title, post.blocks ?? []), post.id)
     } else if (mode === 'bitacora') {
       const post = journalPosts.find((p) => p.id === selectedId)
       if (post?.content) onTextLoad(post.content, post.id)
@@ -90,7 +91,7 @@ export function SourcePicker({ mode, onModeChange, onTextLoad }: SourcePickerPro
               </option>
               {mode === 'devlab' &&
                 devlabPosts.map((p) => (
-                  <option key={p.id} value={p.id} disabled={!p.excerpt}>
+                  <option key={p.id} value={p.id}>
                     {p.title}
                   </option>
                 ))}
