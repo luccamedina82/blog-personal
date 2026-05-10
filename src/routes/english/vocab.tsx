@@ -8,7 +8,6 @@ import { VocabTable } from '@/components/english/vocab/vocab-table'
 import { VocabForm } from '@/components/english/vocab/vocab-form'
 import { TipOfDay } from '@/components/english/vocab/tip-of-day'
 import { listVocab, createVocab, updateVocab, deleteVocab } from '@/lib/english/queries'
-import { DAILY_TIPS } from '@/mocks/english-section-mock'
 import type { VocabEntry } from '@/lib/english/types'
 
 export const Route = createFileRoute('/english/vocab')({
@@ -29,8 +28,6 @@ function VocabPage() {
   const [tab, setTab] = useState<TabValue>('word')
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<VocabEntry | undefined>()
-
-  const todayTip = DAILY_TIPS[new Date().getDate() % DAILY_TIPS.length]
 
   useEffect(() => {
     listVocab()
@@ -126,7 +123,7 @@ function VocabPage() {
         </TabsContent>
 
         <TabsContent value="tip" className="mt-4">
-          <TipOfDay tip={todayTip} />
+          <TipOfDay knownTerms={entries.map((e) => e.term)} />
         </TabsContent>
       </Tabs>
 
