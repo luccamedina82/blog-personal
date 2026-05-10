@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
-import { ChevronDown, RefreshCw, Loader2 } from 'lucide-react'
+import { ChevronDown, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { getTodayTip, saveTip, listTipHistory, type StoredTip } from '@/lib/english/tips'
 
