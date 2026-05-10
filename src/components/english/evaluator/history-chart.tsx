@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   LineChart,
   Line,
@@ -9,7 +10,8 @@ import {
 } from 'recharts'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { Trash2 } from 'lucide-react'
+import { Trash2, ChevronDown, Copy, Check } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import type { EvaluatorRun } from '@/lib/english/types'
 
 interface HistoryChartProps {
@@ -18,6 +20,16 @@ interface HistoryChartProps {
 }
 
 export function HistoryChart({ runs, onClear }: HistoryChartProps) {
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  function handleCopy(run: EvaluatorRun) {
+    if (!run.corrected_text) return
+    navigator.clipboard.writeText(run.corrected_text)
+    setCopiedId(run.id)
+    setTimeout(() => setCopiedId(null), 2000)
+  }
+
   const chartData = [...runs]
     .reverse()
     .slice(-20)
@@ -103,21 +115,80 @@ export function HistoryChart({ runs, onClear }: HistoryChartProps) {
 
       {/* Recent runs table */}
       <div className="rounded-lg border border-border/70 overflow-hidden bg-card/40">
-        <div className="grid grid-cols-[1fr_80px_80px] text-[10px] uppercase tracking-[0.18em] text-muted-foreground bg-background/40 border-b border-border/70">
+        <div className="grid grid-cols-[1fr_80px_60px_32px] text-[10px] uppercase tracking-[0.18em] text-muted-foreground bg-background/40 border-b border-border/70">
           <div className="px-4 py-2.5">Date</div>
           <div className="px-4 py-2.5">Source</div>
           <div className="px-4 py-2.5 text-right">Overall</div>
+          <div />
         </div>
         <ul className="divide-y divide-border/70">
           {runs.slice(0, 10).map((run) => {
             const overall = Math.round(run.scores.reduce((a, s) => a + s.value, 0) / run.scores.length)
+            const expanded = expandedId === run.id
+            const hasDetail = (run.suggestions?.length > 0) || !!run.corrected_text
+
             return (
-              <li key={run.id} className="grid grid-cols-[1fr_80px_80px] text-[13px] hover:bg-card/60 transition-colors">
-                <div className="px-4 py-3 text-muted-foreground tabular-nums">
-                  {new Date(run.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}
-                </div>
-                <div className="px-4 py-3 text-muted-foreground capitalize">{run.source}</div>
-                <div className="px-4 py-3 text-right font-mono text-foreground">{overall}</div>
+              <li key={run.id} className="divide-y divide-border/70">
+                <button
+                  type="button"
+                  onClick={() => hasDetail && setExpandedId(expanded ? null : run.id)}
+                  className={cn(
+                    'w-full grid grid-cols-[1fr_80px_60px_32px] text-[13px] transition-colors text-left',
+                    hasDetail ? 'hover:bg-card/60 cursor-pointer' : 'cursor-default',
+                    expanded && 'bg-card/60',
+                  )}
+                >
+                  <div className="px-4 py-3 text-muted-foreground tabular-nums">
+                    {new Date(run.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}
+                  </div>
+                  <div className="px-4 py-3 text-muted-foreground capitalize">{run.source}</div>
+                  <div className="px-4 py-3 text-right font-mono text-foreground">{overall}</div>
+                  <div className="flex items-center justify-center">
+                    {hasDetail && (
+                      <ChevronDown className={cn('size-3.5 text-muted-foreground/60 transition-transform', expanded && 'rotate-180')} />
+                    )}
+                  </div>
+                </button>
+
+                {expanded && (
+                  <div className="px-4 py-4 space-y-4 bg-background/30">
+                    {run.suggestions?.length > 0 && (
+                      <div>
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Suggestions</p>
+                        <ul className="space-y-1.5">
+                          {run.suggestions.map((s, i) => (
+                            <li key={i} className="flex gap-2.5 text-[13px] text-muted-foreground leading-relaxed">
+                              <span className="text-primary/60 font-mono text-[11px] mt-0.5 shrink-0">{i + 1}.</span>
+                              {s}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {run.corrected_text && (
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Corrected version</p>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-[11px] text-muted-foreground gap-1.5"
+                            onClick={(e) => { e.stopPropagation(); handleCopy(run) }}
+                          >
+                            {copiedId === run.id
+                              ? <><Check className="size-3 text-green-500" />Copied</>
+                              : <><Copy className="size-3" />Copy</>
+                            }
+                          </Button>
+                        </div>
+                        <p className="text-[13px] text-foreground/85 leading-relaxed whitespace-pre-wrap bg-secondary/30 rounded-md px-3 py-2.5">
+                          {run.corrected_text}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </li>
             )
           })}
