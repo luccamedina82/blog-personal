@@ -14,6 +14,7 @@ import { FacultyNoteEditor } from '@/components/faculty/note-editor'
 import { DeadlineList } from '@/components/faculty/deadline-list'
 import { TopicList } from '@/components/faculty/topic-list'
 import { GradesTab } from '@/components/faculty/grades-tab'
+import { QuizTab } from '@/components/faculty/quiz/quiz-tab'
 import {
   getFacultySubject,
   getFacultyNote,
@@ -83,7 +84,7 @@ function SubjectDetail() {
   const [loading, setLoading] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
   const [editNote, setEditNote] = useState<FacultyNote | undefined>()
-  const [activeTab, setActiveTab] = useState<'notas' | 'deadlines' | 'temario' | 'calificaciones'>('notas')
+  const [activeTab, setActiveTab] = useState<'notas' | 'deadlines' | 'temario' | 'calificaciones' | 'quiz'>('notas')
   const [rightPanel, setRightPanel] = useState<RightPanel | null>(null)
   const [citationCtx, setCitationCtx] = useState<CitationCtx | null>(null)
   const insertFnRef = useRef<((page: number) => void) | null>(null)
@@ -443,11 +444,12 @@ function SubjectDetail() {
         <section>
           {/* Tabs */}
           <div className="flex gap-0 border-b border-border mb-6">
-            {(['notas', 'deadlines', 'temario', 'calificaciones'] as const).map((tab) => {
+            {(['notas', 'deadlines', 'temario', 'calificaciones', 'quiz'] as const).map((tab) => {
               const label =
                 tab === 'notas' ? 'Notas' :
                 tab === 'deadlines' ? 'Deadlines' :
-                tab === 'temario' ? 'Temario' : 'Calificaciones'
+                tab === 'temario' ? 'Temario' :
+                tab === 'calificaciones' ? 'Calificaciones' : 'Quiz'
               return (
                 <button
                   key={tab}
@@ -505,6 +507,10 @@ function SubjectDetail() {
           )}
 
           {activeTab === 'calificaciones' && <GradesTab subjectId={subjectId} />}
+
+          {activeTab === 'quiz' && (
+            <QuizTab subjectId={subjectId} notes={notes} />
+          )}
 
           {activeTab === 'temario' && (
             <TopicList

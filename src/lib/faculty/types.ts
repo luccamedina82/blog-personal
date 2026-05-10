@@ -91,3 +91,35 @@ export type FacultyTopicCitation = {
   order_index: number
   created_at: string
 }
+
+export type Quiz = {
+  id: string
+  user_id: string
+  subject_id: string | null
+  title: string
+  source_note_ids: string[]
+  model: string
+  created_at: string
+}
+
+export type QuizQuestion = {
+  id: string
+  user_id: string
+  quiz_id: string
+  order_index: number
+  question: string
+  type: 'multiple_choice' | 'true_false' | 'open'
+  options: string[] | null
+  answer: string
+  explanation: string | null
+}
+
+export type QuizAttempt = {
+  id: string
+  user_id: string
+  quiz_id: string
+  question_id: string
+  user_answer: string | null
+  correct: boolean | null
+  created_at: string
+}
