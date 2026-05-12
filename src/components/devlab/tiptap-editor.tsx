@@ -16,11 +16,19 @@ import { BookCitationExtension } from '@/lib/faculty/book-citation-extension'
 import { BookCitationPicker } from '@/components/library/book-citation-picker'
 import { usePdfPanel } from '@/lib/shared/pdf-panel-context'
 
+import {
+  AnnotationsExtension,
+  dispatchAnnotationsUpdate,
+} from '@/lib/devlab/annotation-extension'
+import type { DevLabAnnotation } from '@/lib/devlab/types'
+
 interface TiptapEditorProps {
   value: string
   onChange: (html: string) => void
   placeholder?: string
   className?: string
+  annotations?: DevLabAnnotation[]
+  onAnnotationClick?: (annotationId: string, rect: { top: number; left: number }) => void
 }
 
 // ── Backlink popover (edit mode) ──────────────────────────────────────────────
@@ -126,7 +134,18 @@ const BacklinkDecorationExtension = Extension.create({
 
 // ── Main editor ───────────────────────────────────────────────────────────────
 
-export function TiptapEditor({ value, onChange, placeholder, className }: TiptapEditorProps) {
+export function TiptapEditor({
+  value,
+  onChange,
+  placeholder,
+  className,
+  annotations,
+  onAnnotationClick,
+}: TiptapEditorProps) {
+  const annotationsRef = useRef<DevLabAnnotation[]>(annotations ?? [])
+  annotationsRef.current = annotations ?? []
+  const annotationClickRef = useRef(onAnnotationClick)
+  annotationClickRef.current = onAnnotationClick
   const allSuggestions = useBacklinkSuggestions()
   const { onNavigate: backlinkNavigate, onPreview: backlinkPreview } = useBacklinkActions()
   const { openPdf, startCitationBrowse } = usePdfPanel()
@@ -174,6 +193,10 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
       Placeholder.configure({ placeholder: placeholder ?? 'Write your content here…' }),
       BookCitationExtension,
       BacklinkDecorationExtension,
+      AnnotationsExtension.configure({
+        getAnnotations: () => annotationsRef.current,
+        onAnnotationClick: (id, rect) => annotationClickRef.current?.(id, rect),
+      }),
     ],
     content: value,
     onUpdate({ editor: e }) {
@@ -202,6 +225,10 @@ export function TiptapEditor({ value, onChange, placeholder, className }: Tiptap
       }
     },
   })
+
+  useEffect(() => {
+    if (editor && annotations) dispatchAnnotationsUpdate(editor, annotations)
+  }, [editor, annotations])
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (query === null || filtered.length === 0) return

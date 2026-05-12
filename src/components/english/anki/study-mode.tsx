@@ -112,7 +112,7 @@ export function StudyMode({ deckId, onBack }: StudyModeProps) {
   }
 
   return (
-    <div className="space-y-6 max-w-xl mx-auto">
+    <div className="space-y-8 max-w-2xl mx-auto w-full">
       {/* Header */}
       <div className="flex items-center justify-between">
         <button
@@ -124,44 +124,47 @@ export function StudyMode({ deckId, onBack }: StudyModeProps) {
           Back
         </button>
         <p className="text-xs text-muted-foreground tabular-nums">
-          {index + 1} / {cards.length}
+          <span className="text-foreground font-medium">{index + 1}</span>
+          <span className="text-muted-foreground/50"> / {cards.length}</span>
         </p>
       </div>
 
       {/* Progress bar */}
-      <div className="h-1 rounded-full bg-border/60 overflow-hidden">
+      <div className="h-1.5 rounded-full bg-border/40 overflow-hidden">
         <div
-          className="h-full bg-primary transition-all duration-300"
+          className="h-full bg-primary transition-all duration-500 ease-out"
           style={{ width: `${(index / cards.length) * 100}%` }}
         />
       </div>
 
       {/* Flip card */}
       <div
-        className="[perspective:1200px] cursor-pointer select-none"
+        className="[perspective:1400px] cursor-pointer select-none group"
         onClick={() => setFlipped(!flipped)}
       >
         <div
-          className={`relative h-52 w-full [transform-style:preserve-3d] transition-transform duration-500 ${
+          className={`relative h-72 sm:h-80 w-full [transform-style:preserve-3d] transition-transform duration-500 ${
             flipped ? '[transform:rotateY(180deg)]' : ''
           }`}
         >
           {/* Front */}
-          <div className="absolute inset-0 [backface-visibility:hidden] flex flex-col items-center justify-center rounded-xl border border-border/70 bg-card p-8 gap-3">
-            <p className="text-xs uppercase tracking-widest text-muted-foreground">Front</p>
-            <p className="text-2xl font-mono text-center text-foreground leading-snug">
+          <div className="absolute inset-0 [backface-visibility:hidden] flex flex-col items-center justify-center rounded-2xl border border-border/60 bg-gradient-to-br from-card to-card/60 p-10 gap-4 shadow-lg shadow-black/5 group-hover:border-primary/30 transition-colors">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground/70">Front</p>
+            <p className="text-3xl font-mono text-center text-foreground leading-snug font-medium">
               {current.front}
             </p>
-            <p className="text-xs text-muted-foreground/60 mt-2">tap to reveal</p>
+            <p className="text-[11px] text-muted-foreground/60 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+              tap to reveal answer
+            </p>
           </div>
           {/* Back */}
-          <div className="absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)] flex flex-col items-center justify-center rounded-xl border border-primary/20 bg-card p-8 gap-3">
-            <p className="text-xs uppercase tracking-widest text-muted-foreground">Back</p>
-            <p className="text-lg text-center text-foreground leading-relaxed">{current.back}</p>
+          <div className="absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)] flex flex-col items-center justify-center rounded-2xl border border-primary/30 bg-gradient-to-br from-card to-primary/5 p-10 gap-4 shadow-lg shadow-primary/10">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-primary/70">Back</p>
+            <p className="text-xl text-center text-foreground leading-relaxed">{current.back}</p>
             {current.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1 justify-center">
+              <div className="flex flex-wrap gap-1.5 justify-center mt-2">
                 {current.tags.map((t) => (
-                  <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
+                  <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-secondary/80 border border-border/50 text-muted-foreground">
                     {t}
                   </span>
                 ))}
@@ -182,7 +185,7 @@ export function StudyMode({ deckId, onBack }: StudyModeProps) {
             key={r.value}
             type="button"
             onClick={() => rate(r.value)}
-            className={`rounded-lg border py-3 text-sm font-medium transition-colors ${r.className}`}
+            className={`rounded-xl border-2 py-3.5 text-sm font-medium transition-all hover:scale-[1.02] active:scale-[0.98] ${r.className}`}
           >
             {r.label}
           </button>
@@ -190,7 +193,7 @@ export function StudyMode({ deckId, onBack }: StudyModeProps) {
       </div>
 
       {!flipped && (
-        <p className="text-center text-xs text-muted-foreground">
+        <p className="text-center text-xs text-muted-foreground/70">
           Click the card to reveal the answer
         </p>
       )}

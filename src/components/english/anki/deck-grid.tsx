@@ -27,12 +27,18 @@ import type { Deck } from '@/lib/english/types'
 import type { DeckWithCount } from '@/lib/english/queries'
 import type { LucideIcon } from 'lucide-react'
 
-const DECK_CATEGORIES: Array<{ value: Deck['category']; label: string; icon: LucideIcon }> = [
-  { value: 'vocab', label: 'Vocabulary', icon: BookOpen },
-  { value: 'phrasal', label: 'Phrasal Verbs', icon: ArrowLeftRight },
-  { value: 'idioms', label: 'Idioms', icon: Lightbulb },
-  { value: 'book-quotes', label: 'Book Quotes', icon: BookMarked },
-  { value: 'tech-notes', label: 'Tech Notes', icon: Code2 },
+const DECK_CATEGORIES: Array<{
+  value: Deck['category']
+  label: string
+  icon: LucideIcon
+  tint: string
+  iconColor: string
+}> = [
+  { value: 'vocab', label: 'Vocabulary', icon: BookOpen, tint: 'from-blue-500/10 to-blue-500/0 border-blue-500/30', iconColor: 'text-blue-400' },
+  { value: 'phrasal', label: 'Phrasal Verbs', icon: ArrowLeftRight, tint: 'from-violet-500/10 to-violet-500/0 border-violet-500/30', iconColor: 'text-violet-400' },
+  { value: 'idioms', label: 'Idioms', icon: Lightbulb, tint: 'from-amber-500/10 to-amber-500/0 border-amber-500/30', iconColor: 'text-amber-400' },
+  { value: 'book-quotes', label: 'Book Quotes', icon: BookMarked, tint: 'from-rose-500/10 to-rose-500/0 border-rose-500/30', iconColor: 'text-rose-400' },
+  { value: 'tech-notes', label: 'Tech Notes', icon: Code2, tint: 'from-emerald-500/10 to-emerald-500/0 border-emerald-500/30', iconColor: 'text-emerald-400' },
 ]
 
 const deckSchema = z.object({
@@ -101,85 +107,97 @@ export function DeckGrid({ decks, onSelect, onCreated, onDeleted }: DeckGridProp
       </div>
 
       {decks.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <p className="text-sm text-muted-foreground">No decks yet. Create one to get started.</p>
+        <div className="flex flex-col items-center justify-center py-20 text-center gap-4 rounded-2xl border border-dashed border-border/60">
+          <span className="flex size-14 items-center justify-center rounded-full bg-secondary/60 border border-border/60">
+            <BookOpen className="size-6 text-muted-foreground/60" />
+          </span>
+          <div>
+            <h3 className="text-base font-medium">Sin decks</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Creá uno para empezar.</p>
+          </div>
+          <Button size="sm" className="gap-1.5 mt-2" onClick={() => setCreateOpen(true)}>
+            <Plus className="size-3.5" />
+            Nuevo deck
+          </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5">
           {decks.map((deck) => {
             const cat = DECK_CATEGORIES.find((c) => c.value === deck.category)
             const Icon = cat?.icon ?? BookOpen
             return (
               <div
                 key={deck.id}
+                onClick={() => onSelect(deck.id)}
                 className={cn(
-                  'group relative flex flex-col items-start gap-3 rounded-lg border border-border/70',
-                  'bg-card/40 hover:bg-card/80 p-5 text-left transition-all duration-200',
-                  'hover:border-primary/30 hover:shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]',
+                  'group relative flex flex-col gap-4 rounded-2xl border bg-gradient-to-br',
+                  'p-5 text-left transition-all duration-200 cursor-pointer',
+                  'hover:shadow-lg hover:shadow-black/5 hover:-translate-y-0.5',
+                  cat?.tint ?? 'from-card to-card/40 border-border/60',
                 )}
               >
                 <div className="flex w-full items-start justify-between">
-                  <span className="flex size-9 items-center justify-center rounded-md bg-secondary/60 border border-border/60">
-                    <Icon className="size-4 text-primary" />
+                  <span
+                    className={cn(
+                      'flex size-11 items-center justify-center rounded-xl border bg-background/40',
+                      cat?.tint ? cat.tint.split(' ')[2] : 'border-border/60',
+                    )}
+                  >
+                    <Icon className={cn('size-5', cat?.iconColor ?? 'text-primary')} />
                   </span>
-                  <div className="flex items-center gap-1">
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-7 text-muted-foreground/40 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={(e) => e.stopPropagation()}
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete "{deck.name}"?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This deletes the deck and all {deck.card_count} cards permanently.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => handleDelete(deck.id, deck.name)}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete "{deck.name}"?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This deletes the deck and all {deck.card_count} cards permanently.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleDelete(deck.id, deck.name)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                    <button
-                      type="button"
-                      onClick={() => onSelect(deck.id)}
-                      className="flex size-7 items-center justify-center rounded text-muted-foreground/40 group-hover:text-primary transition-colors"
-                    >
-                      <ChevronRight className="size-4" />
-                    </button>
-                  </div>
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
 
-                <button
-                  type="button"
-                  className="w-full text-left"
-                  onClick={() => onSelect(deck.id)}
-                >
-                  <p className="text-sm font-medium text-foreground">{deck.name}</p>
-                  {deck.description && (
+                <div className="flex-1">
+                  <p className="text-base font-medium text-foreground line-clamp-1">{deck.name}</p>
+                  {deck.description ? (
                     <p className="mt-1 text-xs text-muted-foreground leading-relaxed line-clamp-2">
                       {deck.description}
                     </p>
+                  ) : (
+                    <p className="mt-1 text-xs text-muted-foreground/50 italic">Sin descripción</p>
                   )}
-                </button>
+                </div>
 
-                <p className="text-[10px] text-muted-foreground/60 tabular-nums">
-                  {deck.card_count} {deck.card_count === 1 ? 'card' : 'cards'}
-                  {' · '}
-                  {cat?.label ?? deck.category}
-                </p>
+                <div className="flex items-center justify-between pt-2 border-t border-border/40">
+                  <div className="flex items-center gap-2 text-[11px]">
+                    <span className="text-foreground font-medium tabular-nums">{deck.card_count}</span>
+                    <span className="text-muted-foreground">
+                      {deck.card_count === 1 ? 'card' : 'cards'}
+                    </span>
+                    <span className="text-muted-foreground/40">·</span>
+                    <span className="text-muted-foreground">{cat?.label ?? deck.category}</span>
+                  </div>
+                  <ChevronRight className="size-3.5 text-muted-foreground/40 group-hover:text-foreground group-hover:translate-x-0.5 transition-all" />
+                </div>
               </div>
             )
           })}

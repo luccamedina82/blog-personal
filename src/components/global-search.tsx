@@ -72,7 +72,7 @@ export function GlobalSearch() {
 
   const totalHits = deckHits.length + vocabHits.length + bookHits.length + sessionHits.length
 
-  function go(to: '/english/anki' | '/english/vocab' | '/english/books' | '/english/shadowing') {
+  function go(to: '/study/decks' | '/english/vocab' | '/english/books' | '/english/shadowing') {
     setOpen(false)
     setQuery('')
     navigate({ to })
@@ -96,7 +96,7 @@ export function GlobalSearch() {
         {deckHits.length > 0 && (
           <CommandGroup heading="Anki decks">
             {deckHits.map((h) => (
-              <CommandItem key={h.id} onSelect={() => go('/english/anki')}>
+              <CommandItem key={h.id} onSelect={() => go('/study/decks')}>
                 <Layers />
                 <span className="flex-1 truncate">{h.label}</span>
                 <span className="text-muted-foreground text-xs shrink-0">{h.sub}</span>

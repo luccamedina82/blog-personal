@@ -9,6 +9,27 @@ async function getUid(): Promise<string> {
 }
 
 export type QuizWithCount = Quiz & { questionCount: number }
+export type QuizWithSubject = QuizWithCount & { subject_name: string | null }
+
+export async function listAllQuizzes(): Promise<QuizWithSubject[]> {
+  const uid = await getUid()
+  const { data, error } = await supabase
+    .from('quizzes')
+    .select('*, quiz_questions(id), faculty_subjects(name)')
+    .eq('user_id', uid)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []).map((q: Record<string, unknown>) => {
+    const questions = (q.quiz_questions as { id: string }[] | null) ?? []
+    const subject = q.faculty_subjects as { name: string } | null
+    const { quiz_questions: _qqs, faculty_subjects: _fs, ...rest } = q
+    return {
+      ...(rest as Quiz),
+      questionCount: questions.length,
+      subject_name: subject?.name ?? null,
+    }
+  })
+}
 
 export async function listQuizzes(subjectId: string): Promise<QuizWithCount[]> {
   const uid = await getUid()

@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import React, { useEffect, useState, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { Bookmark, ExternalLink, X } from 'lucide-react'
+import { Bookmark, ExternalLink, X, ArrowLeft } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { PdfViewer } from '@/components/library/pdf-viewer'
 import { PdfPanelContext } from '@/lib/faculty/pdf-panel-context'
@@ -13,6 +13,7 @@ import { NoteView, NotePreviewPanel, BlockRenderer } from '@/components/faculty/
 import { FacultyNoteEditor } from '@/components/faculty/note-editor'
 import { DeadlineList } from '@/components/faculty/deadline-list'
 import { TopicList } from '@/components/faculty/topic-list'
+import { TopicListReadonly } from '@/components/faculty/topic-list-readonly'
 import { GradesTab } from '@/components/faculty/grades-tab'
 import { QuizTab } from '@/components/faculty/quiz/quiz-tab'
 import {
@@ -28,6 +29,7 @@ import {
   deleteFacultyNote,
   createFacultyNote,
   setDeadlineNoteLink,
+  updateFacultyNote,
 } from '@/lib/faculty/queries'
 import { getDevLabPost, listAllDevLabPostsSummary } from '@/lib/devlab/queries'
 import type { DevLabPost } from '@/lib/devlab/types'
@@ -58,9 +60,10 @@ type CitationCtx = {
 }
 
 type RightPanel =
-  | { kind: 'pdf'; storagePath: string; page: number }
-  | { kind: 'note-preview'; note: FacultyNote }
-  | { kind: 'devlab-preview'; post: DevLabPost }
+  | { kind: 'pdf'; storagePath: string; page: number; returnTo?: RightPanel }
+  | { kind: 'note-preview'; note: FacultyNote; returnTo?: RightPanel }
+  | { kind: 'devlab-preview'; post: DevLabPost; returnTo?: RightPanel }
+  | { kind: 'temario'; returnTo?: RightPanel }
 
 // title → entry for cross-subject and devlab navigation
 type NoteIndexEntry =
@@ -103,6 +106,11 @@ function SubjectDetail() {
       },
     }),
     [],
+  )
+
+  const linkedNoteIds = useMemo(
+    () => new Set(deadlines.map((d) => d.note_id).filter((id): id is string => id !== null)),
+    [deadlines],
   )
 
   function openNote(noteId: string) {
@@ -254,19 +262,19 @@ function SubjectDetail() {
     })
   }
 
-  async function handleCitationClick(citation: FacultyTopicCitation) {
+  async function handleCitationClick(citation: FacultyTopicCitation, returnTo?: RightPanel) {
     if (citation.source_kind === 'library_book') {
       if (citation.source_storage_path) {
-        pdfCtxValue.openPdf(citation.source_storage_path, citation.page ?? 1)
+        setRightPanel({ kind: 'pdf', storagePath: citation.source_storage_path, page: citation.page ?? 1, returnTo })
       }
     } else if (citation.source_kind === 'faculty_note') {
       const local = notes.find((n) => n.id === citation.source_id)
       if (local) {
-        setRightPanel({ kind: 'note-preview', note: local })
+        setRightPanel({ kind: 'note-preview', note: local, returnTo })
       } else {
         try {
           const note = await getFacultyNote(citation.source_id)
-          setRightPanel({ kind: 'note-preview', note })
+          setRightPanel({ kind: 'note-preview', note, returnTo })
         } catch {
           toast.error('Error al cargar nota')
         }
@@ -274,10 +282,25 @@ function SubjectDetail() {
     } else {
       try {
         const post = await getDevLabPost(citation.source_id)
-        setRightPanel({ kind: 'devlab-preview', post })
+        setRightPanel({ kind: 'devlab-preview', post, returnTo })
       } catch {
         toast.error('Error al cargar post')
       }
+    }
+  }
+
+  function handleCitationClickFromTemario(citation: FacultyTopicCitation) {
+    handleCitationClick(citation, { kind: 'temario' })
+  }
+
+  async function handleAssociateNoteToTopic(noteId: string, topicId: string) {
+    try {
+      await updateFacultyNote(noteId, { topic_id: topicId })
+      setNotes((prev) => prev.map((n) => (n.id === noteId ? { ...n, topic_id: topicId } : n)))
+      if (editNote?.id === noteId) setEditNote({ ...editNote, topic_id: topicId })
+      toast.success('Nota asociada al tema')
+    } catch {
+      toast.error('Error al asociar')
     }
   }
 
@@ -400,6 +423,22 @@ function SubjectDetail() {
           }}
           onNoteBacklinkClick={handleBacklinkNavigate}
           onNoteBacklinkPreview={handleBacklinkPreview}
+          onSetRightPanel={setRightPanel}
+          temarioPanelProps={{
+            topics,
+            groups,
+            units,
+            citationsByTopic,
+            notes,
+            onCitationClick: handleCitationClickFromTemario,
+            onNoteClick: (n) =>
+              setRightPanel({ kind: 'note-preview', note: n, returnTo: { kind: 'temario' } }),
+            currentTopicId: editNote?.topic_id ?? null,
+            currentNoteId: editNote?.id ?? null,
+            onAssociate: editNote
+              ? (topicId: string) => handleAssociateNoteToTopic(editNote.id, topicId)
+              : undefined,
+          }}
         >
           <FacultyNoteEditor
             subject={subject}
@@ -417,6 +456,7 @@ function SubjectDetail() {
               closeRightPanel()
             }}
             onCancel={() => { closeEditor(); closeRightPanel() }}
+            onOpenTemario={() => setRightPanel({ kind: 'temario' })}
           />
         </NoteSplitLayout>
       </PdfPanelContext.Provider>
@@ -427,10 +467,6 @@ function SubjectDetail() {
   // ── Subject detail (list) ─────────────────────────────────────────────────
 
   const pendingDeadlines = deadlines.filter((d) => !d.done).length
-  const linkedNoteIds = useMemo(
-    () => new Set(deadlines.map((d) => d.note_id).filter((id): id is string => id !== null)),
-    [deadlines],
-  )
 
   return (
     <FacultyShell
@@ -520,6 +556,8 @@ function SubjectDetail() {
               topics={topics}
               deadlines={deadlines}
               citationsByTopic={citationsByTopic}
+              notes={notes}
+              onNoteClick={(n) => openNote(n.id)}
               onGroupCreated={(g) => setGroups((prev) => [...prev, g])}
               onGroupUpdated={(g) => setGroups((prev) => prev.map((x) => (x.id === g.id ? g : x)))}
               onGroupDeleted={(id) => {
@@ -565,31 +603,54 @@ function SubjectDetail() {
 // Left panel always in same tree position → editor/noteview never remounts when
 // right panel opens or closes, preserving unsaved state.
 
+type TemarioPanelProps = {
+  topics: FacultyTopic[]
+  groups: FacultyTopicGroup[]
+  units: FacultyTopicUnit[]
+  citationsByTopic: Map<string, FacultyTopicCitation[]>
+  notes?: FacultyNote[]
+  onCitationClick: (citation: FacultyTopicCitation) => void
+  onNoteClick?: (note: FacultyNote) => void
+  currentTopicId?: string | null
+  currentNoteId?: string | null
+  onAssociate?: (topicId: string) => void
+}
+
 function NoteSplitLayout({
   children,
   rightPanel,
   onClosePanel,
+  onSetRightPanel,
   citationCtx,
   onCiteAtPage,
   onOpenFullNote,
   onOpenDevLabPost,
   onNoteBacklinkClick,
   onNoteBacklinkPreview,
+  temarioPanelProps,
 }: {
   children: React.ReactNode
   rightPanel: RightPanel | null
   onClosePanel: () => void
+  onSetRightPanel?: (panel: RightPanel | null) => void
   citationCtx: CitationCtx | null
   onCiteAtPage: (page: number) => void
   onOpenFullNote?: (note: FacultyNote) => void
   onOpenDevLabPost?: () => void
   onNoteBacklinkClick?: (title: string) => void
   onNoteBacklinkPreview?: (title: string) => void
+  temarioPanelProps?: TemarioPanelProps
 }) {
   const [currentPdfPage, setCurrentPdfPage] = useState(1)
   const pdfPanel = rightPanel?.kind === 'pdf' ? rightPanel : null
   const notePanel = rightPanel?.kind === 'note-preview' ? rightPanel : null
   const devlabPanel = rightPanel?.kind === 'devlab-preview' ? rightPanel : null
+  const temarioPanel = rightPanel?.kind === 'temario' ? rightPanel : null
+  const returnTo = rightPanel?.returnTo
+  const handleBack = () => {
+    if (returnTo && onSetRightPanel) onSetRightPanel(returnTo)
+    else onClosePanel()
+  }
 
   useEffect(() => {
     if (pdfPanel) setCurrentPdfPage(pdfPanel.page)
@@ -609,6 +670,16 @@ function NoteSplitLayout({
         <div className="flex-1 h-full flex flex-col border-l border-border/60 min-w-0">
           {/* Panel header */}
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/60 bg-background/80 shrink-0 gap-2">
+            {returnTo && (
+              <button
+                type="button"
+                onClick={handleBack}
+                className="flex items-center gap-1 h-6 px-1.5 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shrink-0"
+                title="Volver al temario"
+              >
+                <ArrowLeft className="size-3" />
+              </button>
+            )}
             {pdfPanel ? (
               <>
                 <span className="text-[11px] text-muted-foreground font-medium">PDF</span>
@@ -683,6 +754,18 @@ function NoteSplitLayout({
                   </button>
                 </div>
               </>
+            ) : temarioPanel ? (
+              <>
+                <span className="text-[11px] text-muted-foreground font-medium">Temario</span>
+                <button
+                  type="button"
+                  onClick={onClosePanel}
+                  className="ml-auto flex items-center justify-center size-5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                  title="Cerrar panel"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </>
             ) : null}
           </div>
 
@@ -702,6 +785,10 @@ function NoteSplitLayout({
             />
           ) : devlabPanel ? (
             <DevLabPreviewPanel post={devlabPanel.post} />
+          ) : temarioPanel && temarioPanelProps ? (
+            <div className="flex-1 overflow-y-auto min-h-0">
+              <TopicListReadonly {...temarioPanelProps} />
+            </div>
           ) : null}
         </div>
       )}

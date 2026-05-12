@@ -2,11 +2,12 @@ import { useEffect, useRef } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 
 const NAV_SEQUENCES: Record<string, string> = {
-  'g a': '/english/anki',
+  'g a': '/study/decks',
   'g v': '/english/vocab',
   'g e': '/english/evaluator',
   'g s': '/english/shadowing',
   'g b': '/english/books',
+  'g q': '/study/quizzes',
 }
 
 const SEQUENCE_TIMEOUT = 1000

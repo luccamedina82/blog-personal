@@ -1,6 +1,6 @@
 import type { DevLabBlock } from '@/lib/devlab/types'
 
-function stripHtml(html: string): string {
+export function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
 }
 

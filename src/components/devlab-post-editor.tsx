@@ -1,4 +1,5 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { TiptapEditor } from '@/components/devlab/tiptap-editor'
@@ -8,7 +9,13 @@ import {
   GripVertical, ChevronDown, ChevronUp, Tag, Info,
   ArrowUp, ArrowDown, Loader2,
 } from 'lucide-react'
-import type { DevLabBlock, CodeAnnotation, DevLabPost, PostDraft } from '@/lib/devlab/types'
+import type { DevLabBlock, CodeAnnotation, DevLabPost, PostDraft, DevLabAnnotation } from '@/lib/devlab/types'
+import {
+  listAnnotations,
+  updateAnnotationStatus,
+} from '@/lib/devlab/annotations-queries'
+import { ReviewButton } from '@/components/devlab/annotations/review-button'
+import { AnnotationPopover } from '@/components/devlab/annotations/annotation-popover'
 import { cn } from '@/lib/utils'
 
 // Re-export types consumed by devlab-section
@@ -28,6 +35,8 @@ function TextBlockEditor({
   onMove,
   isFirst,
   isLast,
+  annotations,
+  onAnnotationClick,
 }: {
   block: Extract<DevLabBlock, { kind: 'text' }>
   onChange: (b: Extract<DevLabBlock, { kind: 'text' }>) => void
@@ -35,6 +44,8 @@ function TextBlockEditor({
   onMove: (dir: 'up' | 'down') => void
   isFirst: boolean
   isLast: boolean
+  annotations?: DevLabAnnotation[]
+  onAnnotationClick?: (id: string, rect: { top: number; left: number }) => void
 }) {
   return (
     <div className="group relative flex gap-2">
@@ -45,6 +56,8 @@ function TextBlockEditor({
           value={block.html}
           onChange={(html) => onChange({ ...block, html })}
           placeholder="Write your paragraph here…"
+          annotations={annotations}
+          onAnnotationClick={onAnnotationClick}
         />
       </div>
     </div>
@@ -547,6 +560,81 @@ export function DevLabPostEditor({ categoryLabel, categoryId, initial, onSave, o
     initial?.blocks?.length ? initial.blocks : [{ id: uid(), kind: 'text', html: '' }],
   )
   const [saving, setSaving] = useState(false)
+  const [annotations, setAnnotations] = useState<DevLabAnnotation[]>([])
+  const [popoverState, setPopoverState] = useState<{
+    annotation: DevLabAnnotation
+    pos: { top: number; left: number }
+  } | null>(null)
+
+  useEffect(() => {
+    if (!initial?.id) return
+    listAnnotations(initial.id, false)
+      .then(setAnnotations)
+      .catch((err) => console.error('[devlab annotations load]', err))
+  }, [initial?.id])
+
+  const pendingCount = annotations.filter((a) => a.status === 'pending').length
+  const annotationsByBlock = new Map<string, DevLabAnnotation[]>()
+  for (const a of annotations) {
+    if (!annotationsByBlock.has(a.block_id)) annotationsByBlock.set(a.block_id, [])
+    annotationsByBlock.get(a.block_id)!.push(a)
+  }
+
+  function handleAnnotationClick(id: string, rect: { top: number; left: number }) {
+    const ann = annotations.find((a) => a.id === id)
+    if (!ann) return
+    setPopoverState({ annotation: ann, pos: rect })
+  }
+
+  async function handleAcceptAnnotation() {
+    if (!popoverState) return
+    const ann = popoverState.annotation
+    // Guard: skip accept if originalText or suggestion contains HTML tags
+    if (/[<>]/.test(ann.original_text) || /[<>]/.test(ann.suggestion)) {
+      try {
+        await updateAnnotationStatus(ann.id, 'dismissed')
+        setAnnotations((prev) => prev.map((a) => (a.id === ann.id ? { ...a, status: 'dismissed' } : a)))
+        toast.error('Sugerencia descartada: contiene formato no soportado')
+      } catch {
+        toast.error('Error')
+      }
+      setPopoverState(null)
+      return
+    }
+    // Find block + replace originalText -> suggestion (first occurrence)
+    const block = blocks.find((b) => b.id === ann.block_id)
+    if (!block || block.kind !== 'text') {
+      setPopoverState(null)
+      return
+    }
+    if (!block.html.includes(ann.original_text)) {
+      toast.error('Texto original ya no existe en el bloque')
+      setPopoverState(null)
+      return
+    }
+    const newHtml = block.html.replace(ann.original_text, ann.suggestion)
+    setBlocks((prev) => prev.map((b) => (b.id === ann.block_id ? { ...b, html: newHtml } : b)))
+    try {
+      await updateAnnotationStatus(ann.id, 'accepted')
+      setAnnotations((prev) => prev.map((a) => (a.id === ann.id ? { ...a, status: 'accepted' } : a)))
+      toast.success('Aplicado')
+    } catch {
+      toast.error('Error al guardar status')
+    }
+    setPopoverState(null)
+  }
+
+  async function handleDismissAnnotation() {
+    if (!popoverState) return
+    const ann = popoverState.annotation
+    try {
+      await updateAnnotationStatus(ann.id, 'dismissed')
+      setAnnotations((prev) => prev.map((a) => (a.id === ann.id ? { ...a, status: 'dismissed' } : a)))
+    } catch {
+      toast.error('Error')
+    }
+    setPopoverState(null)
+  }
 
   function addBlock(kind: DevLabBlock['kind']) {
     const id = uid()
@@ -607,6 +695,14 @@ export function DevLabPostEditor({ categoryLabel, categoryId, initial, onSave, o
           <p className="text-sm font-medium text-foreground mt-0.5">{title.trim() || 'Untitled'}</p>
         </div>
         <div className="flex items-center gap-2">
+          {isEdit && initial?.id && (
+            <ReviewButton
+              postId={initial.id}
+              blocks={blocks}
+              pendingCount={pendingCount}
+              onCreated={(created) => setAnnotations((prev) => [...created, ...prev])}
+            />
+          )}
           <button type="button" onClick={onCancel}
             className="flex items-center gap-1.5 h-8 px-3 rounded-md text-xs text-muted-foreground hover:text-foreground border border-border/60 hover:border-border transition-colors">
             Cancel
@@ -656,7 +752,13 @@ export function DevLabPostEditor({ categoryLabel, categoryId, initial, onSave, o
               return (
                 <div key={block.id}>
                   {block.kind === 'text' && (
-                    <TextBlockEditor block={block} onChange={(b) => updateBlock(block.id, b)} {...props} />
+                    <TextBlockEditor
+                      block={block}
+                      onChange={(b) => updateBlock(block.id, b)}
+                      {...props}
+                      annotations={annotationsByBlock.get(block.id)}
+                      onAnnotationClick={handleAnnotationClick}
+                    />
                   )}
                   {block.kind === 'code' && (
                     <CodeBlockEditor block={block} onChange={(b) => updateBlock(block.id, b)} {...props} />
@@ -674,6 +776,15 @@ export function DevLabPostEditor({ categoryLabel, categoryId, initial, onSave, o
           </div>
         </div>
       </div>
+      {popoverState && (
+        <AnnotationPopover
+          annotation={popoverState.annotation}
+          pos={popoverState.pos}
+          onAccept={handleAcceptAnnotation}
+          onDismiss={handleDismissAnnotation}
+          onClose={() => setPopoverState(null)}
+        />
+      )}
     </div>
   )
 }

@@ -39,3 +39,19 @@ export type PostDraft = {
   tags: string[]
   blocks: DevLabBlock[]
 }
+
+export type DevLabAnnotationKind = 'grammar' | 'style' | 'clarity' | 'suggestion'
+export type DevLabAnnotationStatus = 'pending' | 'accepted' | 'dismissed'
+
+export type DevLabAnnotation = {
+  id: string
+  user_id: string
+  post_id: string
+  block_id: string
+  original_text: string
+  suggestion: string
+  rationale: string | null
+  kind: DevLabAnnotationKind
+  status: DevLabAnnotationStatus
+  created_at: string
+}

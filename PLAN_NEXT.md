@@ -574,11 +574,11 @@ export type QuizAttempt = { id: string; quiz_id: string; question_id: string
 
 ## 3b — Temario UX: polish + panel lateral en editor
 
-### 3b-i — Polish vista temario (quick wins)
+### 3b-i — Polish vista temario (quick wins) — ✅ Hecho
 
-- [ ] **Citation chips clickeables**: agregar `cursor-pointer`, `hover:bg-primary/10 hover:border-primary/40` al wrapper del chip + title tooltip más visible. Actualmente el `<button>` interno existe pero visualmente parece badge estático.
-- [ ] **Status pills**: reemplazar `<select>` nativo por 3 botones `P / V / D` con color (pendiente=gris, visto=azul, dominado=verde). Mismo espacio, más visual.
-- [ ] **Filter bar**: barra arriba del temario con `Todo / Pendiente / Visto / Dominado` + conteo por estado. Resuelve el overwhelm en temarios largos.
+- [x] **Citation chips clickeables**: hover bg + border + cursor-pointer en `topic-list.tsx:349`.
+- [x] **Status pills**: círculo P/V/D con cycle on click (`topic-list.tsx:386-401`). Equivalente funcional + menos chrome.
+- [x] **Filter bar**: pills `Todo / Pendiente / Visto / Dominado` con counts (`topic-list.tsx:557-589`).
 
 ### 3b-ii — Temario lateral en editor (feature)
 
@@ -609,12 +609,354 @@ src/components/faculty/topic-list-readonly.tsx   ← nuevo, <150 líneas
 ```
 
 **Checklist:**
-- [ ] `topic-list-readonly.tsx`: árbol colapsable, chips clickeables, prop `onAssociate?`
-- [ ] `RightPanel` type: agregar `{ kind: 'temario'; returnTo?: Omit<RightPanel,'returnTo'> }`
-- [ ] `NoteSplitLayout`: panel body para `temario` → `<TopicListReadonly />`
-- [ ] Header temario panel: si `returnTo` existe → botón `← volver` además de cerrar
-- [ ] Botón "Temario" en toolbar de `FacultyNoteEditor`
-- [ ] `updateFacultyNote(id, { topic_id })` cuando `onAssociate` se invoca
+- [x] `topic-list-readonly.tsx`: árbol colapsable, chips clickeables, prop `onAssociate?`
+- [x] `RightPanel` type: añadido `{ kind: 'temario'; returnTo? }` + `returnTo?` en todas las variantes
+- [x] `NoteSplitLayout`: panel body `temario` → `<TopicListReadonly />`
+- [x] Header con botón `← volver` si `returnTo` existe (vía `handleBack` → `onSetRightPanel(returnTo)`)
+- [x] Botón "Temario" en toolbar de `FacultyNoteEditor` (prop `onOpenTemario`)
+- [x] `updateFacultyNote(id, { topic_id })` en `handleAssociateNoteToTopic` + propaga a editor via `setEditNote` + `initial.topic_id` watcher
+
+---
+
+## 3c — Sección `/study` (Anki + Quizzes)
+
+**Objetivo:** consolidar técnicas de estudio en una sección dedicada. Mover Anki fuera de `/english` y agregar vista global de quizzes de Faculty. Sólo lectura + play (creación sigue desde `/english` y `/faculty`).
+
+### Decisiones
+
+| Item | Decisión |
+|------|----------|
+| Ruta | `/study` con tabs `Decks | Quizzes` |
+| Migración `/english/anki` | Borrar sin redirect (links viejos se rompen) |
+| Scope | Read + play. Crear deck/quiz sigue en `/english`/`/faculty` |
+| Entry points Anki | Sólo `/study`. Botones "Generar cards" en Faculty/DevLab abren modal; al guardar, toast con link a `/study/decks/$id` |
+| Sidebar | Añadir item `Study · Decks & Quizzes` (icono `Brain` o `Sparkles`) entre `Faculty` y `Library` |
+
+### Schema
+
+No requiere migración. Decks/cards/quizzes ya existen.
+
+### Estructura de archivos
+
+```
+src/routes/study/
+  index.tsx               → redirect a /study/decks
+  decks.tsx               → grid (reusa DeckGrid)
+  decks.$deckId.tsx       → DeckView + StudyMode
+  quizzes.tsx             → lista global todos los quizzes (joins subject)
+  quizzes.$quizId.tsx     → QuizPlay
+
+src/components/study/
+  study-shell.tsx         → header + tabs (Decks | Quizzes)
+  quizzes-list.tsx        → tabla: título · materia · #preguntas · score último intento · play
+
+src/components/english/anki/  →  MOVER a  src/components/study/anki/
+  deck-grid.tsx
+  deck-view.tsx
+  study-mode.tsx
+  card-editor.tsx
+  save-to-anki-button.tsx   ← sigue usado desde Faculty/DevLab
+```
+
+### Queries nuevas
+
+- `listAllQuizzes()` en `src/lib/faculty/quizzes.ts` — join con `faculty_subjects(name, code)`. Retorna `Quiz[] & { subject_name: string | null }`.
+- `getLastAttemptScore(quizId)` para columna score (opcional v2).
+
+### Cambios en archivos existentes
+
+- `src/components/app-sidebar.tsx`: añadir entrada `{ id: 'study', label: 'Study', sub: 'Decks & Quizzes', icon: Brain, to: '/study' }`.
+- `src/components/english/english-shell.tsx`: remover tab `anki` del array `TABS`.
+- `src/routes/english/anki.tsx`: borrar archivo (TanStack Router regenera `routeTree.gen.ts`).
+- Imports de anki en `src/components/english/**` y `src/components/ai/generate-cards-modal.tsx`: actualizar path `@/components/english/anki/*` → `@/components/study/anki/*`.
+- `generate-cards-modal.tsx`: al guardar, toast con `Link to="/study/decks/$id"` en vez de `/english/anki`.
+
+### Checklist
+
+- [x] ~~Mover archivos anki~~ Decisión: mantener en `src/components/english/anki/` (8 importers, churn evitado). Routes `/study` consumen desde ahí.
+- [x] `src/components/study/study-shell.tsx`
+- [x] `src/routes/study/index.tsx` → redirect `/study/decks`
+- [x] `src/routes/study/decks.tsx` (state-driven grid/deck/study mode, reusa DeckGrid/DeckView/StudyMode)
+- [x] `listAllQuizzes()` + `QuizWithSubject` en `src/lib/faculty/quizzes.ts`
+- [x] `src/components/study/quizzes-list.tsx`
+- [x] `src/routes/study/quizzes.tsx` (lista) + `quizzes.$quizId.tsx` (reusa `QuizPlay`)
+- [x] Borrado `src/routes/english/anki.tsx`
+- [x] Quitado tab `anki` de `english-shell.tsx`; `english/index.tsx` redirige a `/english/evaluator`
+- [x] `Study` (icono `Brain`) añadido en `app-sidebar.tsx` (NAV usado por sidebar + mobile)
+- [x] Shortcut `g a` → `/study/decks`, nuevo `g q` → `/study/quizzes`
+- [x] `global-search.tsx` deck hits → `/study/decks`
+- [x] `routeTree.gen.ts` regenerado (auto por TanStack)
+- [ ] generate-cards-modal: no tenía link a `/english/anki`. Sin cambios necesarios.
+
+---
+
+## 3d — English: preguntas diarias con review IA
+
+**Objetivo:** loop diario de práctica conversacional. IA genera pregunta (casual/formal/técnica), user responde texto libre, IA devuelve scores + corrected_text + feedback. Historial completo navegable. Puede pedir N preguntas por día.
+
+### Decisiones
+
+| Item | Decisión |
+|------|----------|
+| Persistencia | Tabla dedicada `daily_questions` + `daily_question_answers` |
+| Tono | User elige cada vez: `casual / formal / technical` (sin tono random) |
+| Cron diario | NO — on-demand. Botón "Nueva pregunta" cuantas veces quiera |
+| Review | Gramática + contenido + sugerencias (mismo shape que evaluator) |
+| Proveedor | Groq `llama-3.3-70b-versatile` (ambos endpoints) |
+| Cache | Sólo para `review-answer` (input estable). Generación de pregunta no cachea |
+
+### Schema — `supabase/migrations/0014_daily_questions.sql`
+
+> ⚠️ `0013` ya tomado por `daily_tips.sql`
+
+```sql
+create table daily_questions (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  question text not null,
+  tone text not null check (tone in ('casual','formal','technical')),
+  model text not null,
+  created_at timestamptz default now()
+);
+
+create table daily_question_answers (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  question_id uuid not null references daily_questions(id) on delete cascade,
+  answer_text text not null,
+  scores jsonb,           -- [{ metric, value, feedback }]
+  overall integer,        -- 0-100
+  corrected_text text,
+  suggestions text[] default '{}',
+  created_at timestamptz default now(),
+  unique (question_id)    -- una respuesta por pregunta
+);
+
+create index daily_questions_user_created_idx on daily_questions(user_id, created_at desc);
+
+alter table daily_questions       enable row level security;
+alter table daily_question_answers enable row level security;
+create policy "owner_all" on daily_questions        for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "owner_all" on daily_question_answers for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+```
+
+### Tipos — `src/lib/english/daily-questions.ts`
+
+```ts
+export type DailyQuestionTone = 'casual' | 'formal' | 'technical'
+
+export type DailyQuestion = {
+  id: string; user_id: string; question: string
+  tone: DailyQuestionTone; model: string; created_at: string
+}
+
+export type DailyQuestionAnswer = {
+  id: string; user_id: string; question_id: string
+  answer_text: string
+  scores: { metric: string; value: number; feedback: string }[] | null
+  overall: number | null
+  corrected_text: string | null
+  suggestions: string[]
+  created_at: string
+}
+
+export type DailyQuestionWithAnswer = DailyQuestion & { answer: DailyQuestionAnswer | null }
+```
+
+### Backend
+
+**`api/ai/daily-question.ts`** (Edge, Groq)
+- Input: `{ tone: DailyQuestionTone }`
+- Prompt: "Generate ONE English practice question. Tone={tone}. Casual=opinion/small-talk; Formal=essay/argument; Technical=dev/science. Output strict JSON `{ question: string }`. Keep under 25 words."
+- No cache (variedad).
+
+**`api/ai/review-answer.ts`** (Edge, Groq, JSON mode)
+- Input: `{ question: string; answer: string }`
+- Prompt: "Evaluate this English answer to the given question. Score grammar/vocabulary/fluency/coherence (0-100). Provide corrected version + 2-4 specific suggestions. Output strict JSON `{ scores, overall, corrected_text, suggestions }`."
+- Cache: SHA-256(`question|answer`) en `ai_cache` (acción `review-answer`).
+
+### Queries — `src/lib/english/daily-questions-queries.ts`
+
+| Función | Descripción |
+|---------|-------------|
+| `createDailyQuestion(question, tone, model)` | INSERT |
+| `submitAnswer(questionId, answer, review)` | INSERT en `daily_question_answers` |
+| `listDailyQuestions(limit?, offset?)` | SELECT con join LEFT a `daily_question_answers` ordered by created_at desc |
+| `getQuestionWithAnswer(id)` | single con answer |
+| `deleteQuestion(id)` | cascade borra answer |
+
+### UI
+
+```
+src/routes/english/daily.tsx        → tab nuevo en english-shell
+
+src/components/english/daily/
+  daily-question-card.tsx           → pregunta activa: tone selector + textarea + submit
+  tone-selector.tsx                 → 3 botones casual/formal/technical
+  review-display.tsx                → scores (reusa evaluator look) + corrected_text + suggestions
+  question-history.tsx              → lista colapsable: pregunta + tono + respuesta + review
+```
+
+**Flujo:**
+1. Selector de tono → botón "Nueva pregunta" → `POST /api/ai/daily-question` → INSERT en `daily_questions` → muestra question card.
+2. User escribe respuesta en textarea → botón "Submit" → `POST /api/ai/review-answer` → INSERT en `daily_question_answers` con scores+corrected_text → muestra ReviewDisplay debajo de la pregunta.
+3. Botón "Otra pregunta" arriba (resetea card, mantiene historial).
+4. Historial paginado (10 por página) debajo, item colapsable.
+
+### Cambios en archivos existentes
+
+- `src/components/english/english-shell.tsx`: añadir tab `{ id: 'daily', label: 'Daily', to: '/english/daily' }` (después de Evaluator).
+
+### Checklist
+
+- [x] `supabase/migrations/0014_daily_questions.sql` — ⚠️ pendiente correr en Supabase
+- [x] `src/lib/english/daily-questions.ts` tipos
+- [x] `src/lib/english/daily-questions-queries.ts` queries
+- [x] Prompts inlineados en `api/ai/daily-question.ts` + `api/ai/review-answer.ts` (patrón Vercel functions isoladas)
+- [x] `api/ai/daily-question.ts` (Groq, evita repetir últimas 8 preguntas)
+- [x] `api/ai/review-answer.ts` (Groq, sin cache por ahora)
+- [x] `src/components/english/daily/tone-selector.tsx` (3 botones casual/formal/technical con tint)
+- [x] `src/components/english/daily/daily-question-card.tsx` (flujo completo: generar → responder → review)
+- [x] `src/components/english/daily/review-display.tsx` (scores + bars + suggestions + corrected text)
+- [x] `src/components/english/daily/question-history.tsx` (colapsable + delete)
+- [x] `src/routes/english/daily.tsx`
+- [x] Tab `Daily` en `english-shell.tsx`
+
+---
+
+## 3e — DevLab: inline AI reviews (annotations)
+
+**Objetivo:** IA marca rangos de texto en bloques `text` de DevLab posts con sugerencias visibles inline (highlight de color + popover). User accept/dismiss por sugerencia. Sólo trigger manual (botón en toolbar).
+
+### Decisiones
+
+| Item | Decisión |
+|------|----------|
+| Visualización | Highlights de color + popover (accept/dismiss/copy) |
+| Persistencia | Tabla `devlab_annotations` con `status: pending/accepted/dismissed` |
+| Ciclo de vida | Sobreviven recargas. User gestiona explícitamente. No auto-invalidación si bloque cambia (v2) |
+| Trigger | Botón manual "Revisar con IA" en toolbar del editor/viewer |
+| Scope bloques | Sólo `kind === 'text'` (skip code/image/quote v1) |
+| Accept = | Reemplazar `originalText` por `suggestion` dentro del HTML del bloque, marcar status |
+| Tags HTML en `originalText` | **Autodismiss v1** — prompt exige plain text; guard cliente detecta `<`/`>` → status='dismissed' + toast |
+| Proveedor | Groq `llama-3.3-70b-versatile` |
+
+### Schema — `supabase/migrations/0015_devlab_annotations.sql`
+
+> Tabla referenciada confirmada: `devlab_posts` (existe en `0001_init.sql:137`)
+
+```sql
+create table devlab_annotations (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  post_id uuid not null references devlab_posts(id) on delete cascade,
+  block_id text not null,           -- ID del DevLabBlock (uuid string)
+  original_text text not null,      -- texto exacto del rango
+  suggestion text not null,         -- texto/sugerencia propuesta
+  rationale text,                   -- por qué (opcional)
+  kind text not null check (kind in ('grammar','style','clarity','suggestion')),
+  status text not null check (status in ('pending','accepted','dismissed')) default 'pending',
+  created_at timestamptz default now()
+);
+
+create index devlab_annotations_post_idx on devlab_annotations(post_id, status);
+
+alter table devlab_annotations enable row level security;
+create policy "owner_all" on devlab_annotations
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+```
+
+### Tipos — extender `src/lib/devlab/types.ts`
+
+```ts
+export type DevLabAnnotationKind = 'grammar' | 'style' | 'clarity' | 'suggestion'
+export type DevLabAnnotationStatus = 'pending' | 'accepted' | 'dismissed'
+
+export type DevLabAnnotation = {
+  id: string; user_id: string; post_id: string
+  block_id: string; original_text: string; suggestion: string
+  rationale: string | null
+  kind: DevLabAnnotationKind
+  status: DevLabAnnotationStatus
+  created_at: string
+}
+```
+
+### Backend — `api/ai/review-devlab.ts` (Edge, Groq JSON)
+
+- Input: `{ postId: string; blocks: { id: string; plainText: string }[] }`
+  - Cliente extrae plain text de cada bloque text vía `stripHtml` (existe en `extract.ts`).
+- Prompt: "Review writing quality. For each block, find segments that could be improved. Return strict JSON: `{ annotations: [{ blockId, originalText, suggestion, rationale, kind }] }`. kind ∈ grammar/style/clarity/suggestion. originalText MUST appear verbatim in the block's text. Max 8 annotations total."
+- Server valida que `originalText` exista en el bloque (skip si no) y devuelve al cliente.
+- Cliente INSERT bulk en `devlab_annotations` con status='pending'.
+- Cache: SHA-256(`postId|blocks_plain_concatenado`) en `ai_cache`.
+
+### TipTap integration
+
+**Nueva extensión** `src/lib/devlab/annotation-extension.ts`:
+- Sigue patrón de `BookCitationExtension` (Plugin + DecorationSet) ya presente en codebase.
+- Recibe `annotations: DevLabAnnotation[]` (filtradas a status pending+accepted del bloque actual).
+- En cada render, busca `originalText` en el doc del bloque y aplica `Decoration.inline(from, to, { class: 'devlab-annotation devlab-annotation--{kind}' })`.
+- Click sobre decoration → callback `onAnnotationClick(annotationId, rect)`.
+
+**Estilos** en `src/index.css`:
+- `.devlab-annotation--grammar { background: rgb(239 68 68 / 0.15); border-bottom: 1px dashed rgb(239 68 68); }`
+- `.devlab-annotation--style { background: rgb(234 179 8 / 0.15); ... }`
+- `.devlab-annotation--clarity { background: rgb(59 130 246 / 0.15); ... }`
+- `.devlab-annotation--suggestion { background: rgb(34 197 94 / 0.15); ... }`
+
+### Componentes
+
+```
+src/components/devlab/annotations/
+  review-button.tsx         → toolbar; loading state; muestra count badge si hay pending
+  annotation-popover.tsx    → portal: original (tachado) → suggestion (verde) + rationale + Accept/Dismiss/Copy
+  annotations-panel.tsx     → opcional v2: panel lateral con lista de pending
+```
+
+### Queries — `src/lib/devlab/annotations-queries.ts`
+
+| Función | Descripción |
+|---------|-------------|
+| `listAnnotations(postId)` | SELECT por post (status != dismissed por default, flag opcional) |
+| `bulkCreateAnnotations(rows)` | INSERT múltiple |
+| `acceptAnnotation(id, post)` | UPDATE status + retorna data para reemplazar texto en bloque |
+| `dismissAnnotation(id)` | UPDATE status='dismissed' |
+| `clearDismissed(postId)` | DELETE status='dismissed' (cleanup opcional) |
+
+### Lógica accept
+
+Al accept:
+1. Cliente busca el bloque (`block_id`) en el post actual.
+2. Si bloque kind='text': reemplaza `originalText` por `suggestion` en `block.html` (string replace primera ocurrencia). Para HTML, usar mismo `stripHtml` para encontrar offset y aplicar replace cuidando tags — alternativa: forzar replace en `plainText` y re-serializar (lossy con bold/italic). **Decisión v1**: replace string simple en HTML, asume que `originalText` no contiene tags. Si contiene → marcar como dismissed y avisar.
+3. `updatePost(postId, blocks)` para persistir el cambio.
+4. `acceptAnnotation(id)` para marcar status.
+
+**Guard tags HTML (v1):**
+- Server-side: prompt exige `originalText` sin tags. Validación regex `/[<>]/` antes de devolver al cliente — si hay match, descarta esa annotation.
+- Client-side al accept: re-check `/[<>]/.test(originalText)` → si true, `dismissAnnotation(id)` + toast "Sugerencia con formato no soportada".
+
+### Cambios en archivos existentes
+
+- Editor DevLab (buscar componente principal en `src/components/devlab/`): añadir botón en toolbar + integrar `AnnotationExtension`.
+- Vista DevLab (read): mostrar highlights también en lectura (annotations accepted no se muestran como highlight, sólo pending).
+- `src/lib/devlab/types.ts`: tipos.
+
+### Checklist
+
+- [x] `supabase/migrations/0015_devlab_annotations.sql` — ⚠️ pendiente correr en Supabase
+- [x] Tipos `DevLabAnnotation*` en `src/lib/devlab/types.ts`
+- [x] `src/lib/devlab/annotations-queries.ts` (list / bulkCreate / updateStatus / delete)
+- [x] Prompt inlineado en `api/ai/review-devlab.ts`
+- [x] `api/ai/review-devlab.ts` (Groq + validación originalText verbatim + regex `[<>]` guard server-side)
+- [x] `src/lib/devlab/annotation-extension.ts` (TipTap Plugin + DecorationSet + click handler vía PluginKey meta)
+- [x] Estilos `.devlab-annotation--*` en `src/index.css` (red/amber/blue/emerald por kind)
+- [x] `src/components/devlab/annotations/review-button.tsx`
+- [x] `src/components/devlab/annotations/annotation-popover.tsx`
+- [x] Integrar extensión en `tiptap-editor.tsx` (props `annotations` + `onAnnotationClick` + dispatch en effect)
+- [x] Integrar toolbar + popover + state en `devlab-post-editor.tsx`
+- [x] Lógica accept (replace HTML primera ocurrencia + updateStatus) con guard regex `[<>]` autodismiss
+- [ ] Integrar lectura solo-display en `DevLabPostView` (v2 — diferido)
 
 ---
 
@@ -633,6 +975,9 @@ src/components/faculty/topic-list-readonly.tsx   ← nuevo, <150 líneas
 | 🔴 Alta | `0010_evaluator_titles.sql` | Correr en Supabase — habilita title/source_title en evaluator runs |
 | 🔴 Alta | `0011_cards_source_kind_faculty.sql` | Correr en Supabase — habilita guardar cards desde Faculty |
 | 🔴 Alta | `0012_quizzes.sql` | Correr en Supabase — habilita quizzes (12d) |
+| 🔴 Alta | `0014_daily_questions.sql` | Correr en Supabase — habilita English daily questions (§3d) |
+| 🔴 Alta | `0015_devlab_annotations.sql` | Correr en Supabase — habilita DevLab inline reviews (§3e) |
+| 🟡 Media | BYOK: API keys por usuario (Groq/Gemini) | Tabla `user_settings (user_id pk, groq_key, gemini_key)` + RLS. Settings page con form. Endpoints `api/ai/*` leen JWT → buscan key del user → fallback a env var. Permite que cada amigo use su free tier sin compartir cuota. ~1-2h. |
 | 🟢 Baja | Fase 9d Export PDF (`jspdf + html2canvas`) | No bloquea nada |
 | 🟢 Baja | Drag-and-drop bloques (`@dnd-kit`) | Nice-to-have, botones ▲▼ funcionan |
 | 🟢 Baja | Anki import/export `.apkg` (`genanki-js`) | Post-Fase 12 |
@@ -663,11 +1008,12 @@ pnpm dlx supabase gen types typescript --linked > src/lib/database.types.ts
 ---
 
 **Próximo paso sugerido:**
-1. **Fix evaluator** (§3a-i + 3a-ii) — bug título/blocks + corrected text. Rápido, alto impacto.
-2. **Setup cache IA** (§12a `cache.ts` + `0008_ai_cache.sql`) — desbloquea 12c/12d.
-3. **12c Anki cards** — ya hay schema `Card`/`Deck`, reusa pipeline evaluator.
-4. **12d Quiz** — más pesado (3 tablas, 2 componentes nuevos, Gemini SDK).
-5. §1b (script SQL kind→deadlines) cuando convenga.
+1. **§3b Temario UX** — polish quick wins + panel lateral en editor (sin migraciones).
+2. **§3c Study section** — mover Anki + listar quizzes. Refactor + 2 rutas. Sin schema nuevo.
+3. **§3d Daily questions** — schema 0013 + 2 endpoints + 4 componentes + tab english.
+4. **§3e DevLab inline reviews** — schema 0014 + extensión TipTap + endpoint review. Lo más complejo.
+5. **Setup cache IA** (§12a `cache.ts` + `0008_ai_cache.sql`) — desbloquea cache para §3d/§3e.
+6. §1b (script SQL kind→deadlines) cuando convenga.
 
 
 

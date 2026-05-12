@@ -15,16 +15,20 @@ import { Route as EnglishRouteImport } from './routes/english'
 import { Route as DevlabRouteImport } from './routes/devlab'
 import { Route as BitacoraRouteImport } from './routes/bitacora'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as StudyIndexRouteImport } from './routes/study/index'
 import { Route as LibraryIndexRouteImport } from './routes/library/index'
 import { Route as FacultyIndexRouteImport } from './routes/faculty/index'
 import { Route as EnglishIndexRouteImport } from './routes/english/index'
+import { Route as StudyDecksRouteImport } from './routes/study/decks'
 import { Route as FacultySubjectIdRouteImport } from './routes/faculty/$subjectId'
 import { Route as EnglishVocabRouteImport } from './routes/english/vocab'
 import { Route as EnglishShadowingRouteImport } from './routes/english/shadowing'
 import { Route as EnglishEvaluatorRouteImport } from './routes/english/evaluator'
+import { Route as EnglishDailyRouteImport } from './routes/english/daily'
 import { Route as EnglishBooksRouteImport } from './routes/english/books'
-import { Route as EnglishAnkiRouteImport } from './routes/english/anki'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
+import { Route as StudyQuizzesIndexRouteImport } from './routes/study/quizzes/index'
+import { Route as StudyQuizzesQuizIdRouteImport } from './routes/study/quizzes/$quizId'
 
 const ProfileRoute = ProfileRouteImport.update({
   id: '/profile',
@@ -56,6 +60,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StudyIndexRoute = StudyIndexRouteImport.update({
+  id: '/study/',
+  path: '/study/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LibraryIndexRoute = LibraryIndexRouteImport.update({
   id: '/library/',
   path: '/library/',
@@ -70,6 +79,11 @@ const EnglishIndexRoute = EnglishIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => EnglishRoute,
+} as any)
+const StudyDecksRoute = StudyDecksRouteImport.update({
+  id: '/study/decks',
+  path: '/study/decks',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const FacultySubjectIdRoute = FacultySubjectIdRouteImport.update({
   id: '/faculty/$subjectId',
@@ -91,19 +105,29 @@ const EnglishEvaluatorRoute = EnglishEvaluatorRouteImport.update({
   path: '/evaluator',
   getParentRoute: () => EnglishRoute,
 } as any)
+const EnglishDailyRoute = EnglishDailyRouteImport.update({
+  id: '/daily',
+  path: '/daily',
+  getParentRoute: () => EnglishRoute,
+} as any)
 const EnglishBooksRoute = EnglishBooksRouteImport.update({
   id: '/books',
   path: '/books',
   getParentRoute: () => EnglishRoute,
 } as any)
-const EnglishAnkiRoute = EnglishAnkiRouteImport.update({
-  id: '/anki',
-  path: '/anki',
-  getParentRoute: () => EnglishRoute,
-} as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
   path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StudyQuizzesIndexRoute = StudyQuizzesIndexRouteImport.update({
+  id: '/study/quizzes/',
+  path: '/study/quizzes/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StudyQuizzesQuizIdRoute = StudyQuizzesQuizIdRouteImport.update({
+  id: '/study/quizzes/$quizId',
+  path: '/study/quizzes/$quizId',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -115,15 +139,19 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
   '/auth/callback': typeof AuthCallbackRoute
-  '/english/anki': typeof EnglishAnkiRoute
   '/english/books': typeof EnglishBooksRoute
+  '/english/daily': typeof EnglishDailyRoute
   '/english/evaluator': typeof EnglishEvaluatorRoute
   '/english/shadowing': typeof EnglishShadowingRoute
   '/english/vocab': typeof EnglishVocabRoute
   '/faculty/$subjectId': typeof FacultySubjectIdRoute
+  '/study/decks': typeof StudyDecksRoute
   '/english/': typeof EnglishIndexRoute
   '/faculty/': typeof FacultyIndexRoute
   '/library/': typeof LibraryIndexRoute
+  '/study/': typeof StudyIndexRoute
+  '/study/quizzes/$quizId': typeof StudyQuizzesQuizIdRoute
+  '/study/quizzes/': typeof StudyQuizzesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -132,15 +160,19 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
   '/auth/callback': typeof AuthCallbackRoute
-  '/english/anki': typeof EnglishAnkiRoute
   '/english/books': typeof EnglishBooksRoute
+  '/english/daily': typeof EnglishDailyRoute
   '/english/evaluator': typeof EnglishEvaluatorRoute
   '/english/shadowing': typeof EnglishShadowingRoute
   '/english/vocab': typeof EnglishVocabRoute
   '/faculty/$subjectId': typeof FacultySubjectIdRoute
+  '/study/decks': typeof StudyDecksRoute
   '/english': typeof EnglishIndexRoute
   '/faculty': typeof FacultyIndexRoute
   '/library': typeof LibraryIndexRoute
+  '/study': typeof StudyIndexRoute
+  '/study/quizzes/$quizId': typeof StudyQuizzesQuizIdRoute
+  '/study/quizzes': typeof StudyQuizzesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -151,15 +183,19 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
   '/auth/callback': typeof AuthCallbackRoute
-  '/english/anki': typeof EnglishAnkiRoute
   '/english/books': typeof EnglishBooksRoute
+  '/english/daily': typeof EnglishDailyRoute
   '/english/evaluator': typeof EnglishEvaluatorRoute
   '/english/shadowing': typeof EnglishShadowingRoute
   '/english/vocab': typeof EnglishVocabRoute
   '/faculty/$subjectId': typeof FacultySubjectIdRoute
+  '/study/decks': typeof StudyDecksRoute
   '/english/': typeof EnglishIndexRoute
   '/faculty/': typeof FacultyIndexRoute
   '/library/': typeof LibraryIndexRoute
+  '/study/': typeof StudyIndexRoute
+  '/study/quizzes/$quizId': typeof StudyQuizzesQuizIdRoute
+  '/study/quizzes/': typeof StudyQuizzesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -171,15 +207,19 @@ export interface FileRouteTypes {
     | '/login'
     | '/profile'
     | '/auth/callback'
-    | '/english/anki'
     | '/english/books'
+    | '/english/daily'
     | '/english/evaluator'
     | '/english/shadowing'
     | '/english/vocab'
     | '/faculty/$subjectId'
+    | '/study/decks'
     | '/english/'
     | '/faculty/'
     | '/library/'
+    | '/study/'
+    | '/study/quizzes/$quizId'
+    | '/study/quizzes/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -188,15 +228,19 @@ export interface FileRouteTypes {
     | '/login'
     | '/profile'
     | '/auth/callback'
-    | '/english/anki'
     | '/english/books'
+    | '/english/daily'
     | '/english/evaluator'
     | '/english/shadowing'
     | '/english/vocab'
     | '/faculty/$subjectId'
+    | '/study/decks'
     | '/english'
     | '/faculty'
     | '/library'
+    | '/study'
+    | '/study/quizzes/$quizId'
+    | '/study/quizzes'
   id:
     | '__root__'
     | '/'
@@ -206,15 +250,19 @@ export interface FileRouteTypes {
     | '/login'
     | '/profile'
     | '/auth/callback'
-    | '/english/anki'
     | '/english/books'
+    | '/english/daily'
     | '/english/evaluator'
     | '/english/shadowing'
     | '/english/vocab'
     | '/faculty/$subjectId'
+    | '/study/decks'
     | '/english/'
     | '/faculty/'
     | '/library/'
+    | '/study/'
+    | '/study/quizzes/$quizId'
+    | '/study/quizzes/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -226,8 +274,12 @@ export interface RootRouteChildren {
   ProfileRoute: typeof ProfileRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   FacultySubjectIdRoute: typeof FacultySubjectIdRoute
+  StudyDecksRoute: typeof StudyDecksRoute
   FacultyIndexRoute: typeof FacultyIndexRoute
   LibraryIndexRoute: typeof LibraryIndexRoute
+  StudyIndexRoute: typeof StudyIndexRoute
+  StudyQuizzesQuizIdRoute: typeof StudyQuizzesQuizIdRoute
+  StudyQuizzesIndexRoute: typeof StudyQuizzesIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -274,6 +326,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/study/': {
+      id: '/study/'
+      path: '/study'
+      fullPath: '/study/'
+      preLoaderRoute: typeof StudyIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/library/': {
       id: '/library/'
       path: '/library'
@@ -294,6 +353,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/english/'
       preLoaderRoute: typeof EnglishIndexRouteImport
       parentRoute: typeof EnglishRoute
+    }
+    '/study/decks': {
+      id: '/study/decks'
+      path: '/study/decks'
+      fullPath: '/study/decks'
+      preLoaderRoute: typeof StudyDecksRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/faculty/$subjectId': {
       id: '/faculty/$subjectId'
@@ -323,18 +389,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EnglishEvaluatorRouteImport
       parentRoute: typeof EnglishRoute
     }
+    '/english/daily': {
+      id: '/english/daily'
+      path: '/daily'
+      fullPath: '/english/daily'
+      preLoaderRoute: typeof EnglishDailyRouteImport
+      parentRoute: typeof EnglishRoute
+    }
     '/english/books': {
       id: '/english/books'
       path: '/books'
       fullPath: '/english/books'
       preLoaderRoute: typeof EnglishBooksRouteImport
-      parentRoute: typeof EnglishRoute
-    }
-    '/english/anki': {
-      id: '/english/anki'
-      path: '/anki'
-      fullPath: '/english/anki'
-      preLoaderRoute: typeof EnglishAnkiRouteImport
       parentRoute: typeof EnglishRoute
     }
     '/auth/callback': {
@@ -344,12 +410,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/study/quizzes/': {
+      id: '/study/quizzes/'
+      path: '/study/quizzes'
+      fullPath: '/study/quizzes/'
+      preLoaderRoute: typeof StudyQuizzesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/study/quizzes/$quizId': {
+      id: '/study/quizzes/$quizId'
+      path: '/study/quizzes/$quizId'
+      fullPath: '/study/quizzes/$quizId'
+      preLoaderRoute: typeof StudyQuizzesQuizIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 interface EnglishRouteChildren {
-  EnglishAnkiRoute: typeof EnglishAnkiRoute
   EnglishBooksRoute: typeof EnglishBooksRoute
+  EnglishDailyRoute: typeof EnglishDailyRoute
   EnglishEvaluatorRoute: typeof EnglishEvaluatorRoute
   EnglishShadowingRoute: typeof EnglishShadowingRoute
   EnglishVocabRoute: typeof EnglishVocabRoute
@@ -357,8 +437,8 @@ interface EnglishRouteChildren {
 }
 
 const EnglishRouteChildren: EnglishRouteChildren = {
-  EnglishAnkiRoute: EnglishAnkiRoute,
   EnglishBooksRoute: EnglishBooksRoute,
+  EnglishDailyRoute: EnglishDailyRoute,
   EnglishEvaluatorRoute: EnglishEvaluatorRoute,
   EnglishShadowingRoute: EnglishShadowingRoute,
   EnglishVocabRoute: EnglishVocabRoute,
@@ -377,8 +457,12 @@ const rootRouteChildren: RootRouteChildren = {
   ProfileRoute: ProfileRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   FacultySubjectIdRoute: FacultySubjectIdRoute,
+  StudyDecksRoute: StudyDecksRoute,
   FacultyIndexRoute: FacultyIndexRoute,
   LibraryIndexRoute: LibraryIndexRoute,
+  StudyIndexRoute: StudyIndexRoute,
+  StudyQuizzesQuizIdRoute: StudyQuizzesQuizIdRoute,
+  StudyQuizzesIndexRoute: StudyQuizzesIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { ArrowLeft } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { ArrowLeft, ListTree } from 'lucide-react'
 import { toast } from 'sonner'
 import { DevLabPostEditor } from '@/components/devlab-post-editor'
 import { createFacultyNote, updateFacultyNote, listAllNotesSummary } from '@/lib/faculty/queries'
@@ -36,6 +36,7 @@ type Props = {
   initial?: FacultyNote
   onSaved: (note: FacultyNote) => void
   onCancel: () => void
+  onOpenTemario?: () => void
 }
 
 export function FacultyNoteEditor({
@@ -46,6 +47,7 @@ export function FacultyNoteEditor({
   initial,
   onSaved,
   onCancel,
+  onOpenTemario,
 }: Props) {
   const isEdit = !!initial
 
@@ -71,6 +73,11 @@ export function FacultyNoteEditor({
   const [date, setDate] = useState(initial?.date ?? '')
   const [grade, setGrade] = useState(initial?.grade != null ? String(initial.grade) : '')
   const [topicId, setTopicId] = useState<string | null>(initial?.topic_id ?? null)
+  const prevInitialTopicIdRef = useRef(initial?.topic_id)
+  if (initial?.topic_id !== prevInitialTopicIdRef.current) {
+    prevInitialTopicIdRef.current = initial?.topic_id
+    setTopicId(initial?.topic_id ?? null)
+  }
 
   const needsGrade = GRADED_KINDS.includes(kind)
 
@@ -238,6 +245,18 @@ export function FacultyNoteEditor({
               onChange={(e) => setGrade(e.target.value)}
               className="h-7 w-20 rounded-md border border-border/60 bg-card/40 px-2 text-xs text-foreground/80 outline-none focus:border-primary/40 transition-colors"
             />
+          )}
+
+          {onOpenTemario && (
+            <button
+              type="button"
+              onClick={onOpenTemario}
+              title="Ver temario"
+              className="flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border/60 bg-card/40 text-xs text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+            >
+              <ListTree className="size-3.5" />
+              Temario
+            </button>
           )}
         </div>
       </div>

@@ -3,14 +3,11 @@ import { Link, useRouterState } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 
 const TABS = [
-  { id: 'daily', label: 'Daily', to: '/english/daily' },
-  { id: 'evaluator', label: 'Evaluator', to: '/english/evaluator' },
-  { id: 'vocab', label: 'Vocab', to: '/english/vocab' },
-  { id: 'shadowing', label: 'Shadowing', to: '/english/shadowing' },
-  { id: 'books', label: 'Books', to: '/english/books' },
+  { id: 'decks', label: 'Anki Decks', to: '/study/decks' },
+  { id: 'quizzes', label: 'Quizzes', to: '/study/quizzes' },
 ] as const
 
-export function EnglishShell({ children }: { children: ReactNode }) {
+export function StudyShell({ children }: { children: ReactNode }) {
   'use no memo'
   const pathname = useRouterState({ select: (s) => s.location.pathname })
 
@@ -18,10 +15,10 @@ export function EnglishShell({ children }: { children: ReactNode }) {
     <div className="flex flex-col min-h-full">
       <div className="px-6 lg:px-12 pt-10">
         <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground mb-2">
-          Module C · English & Literature
+          Study · Decks & Quizzes
         </p>
         <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-balance">
-          A laboratory for reading and writing English.
+          Tu sala de estudio.
         </h1>
 
         <div className="mt-8 flex gap-0 border-b border-border overflow-x-auto">
@@ -45,9 +42,7 @@ export function EnglishShell({ children }: { children: ReactNode }) {
         </div>
       </div>
 
-      <div className="flex-1 px-6 lg:px-12 py-8">
-        {children}
-      </div>
+      <div className="flex-1 px-6 lg:px-12 py-8">{children}</div>
     </div>
   )
 }

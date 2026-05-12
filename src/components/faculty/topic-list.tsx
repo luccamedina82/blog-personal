@@ -19,6 +19,7 @@ import {
 import type {
   FacultyTopic, FacultyTopicStatus, FacultyTopicGroup, FacultyTopicUnit,
   FacultyTopicCitation, FacultyTopicCitationKind, FacultyDeadline,
+  FacultyNote,
 } from '@/lib/faculty/types'
 
 
@@ -62,6 +63,8 @@ type Props = {
   topics: FacultyTopic[]
   deadlines: FacultyDeadline[]
   citationsByTopic: Map<string, FacultyTopicCitation[]>
+  notes?: FacultyNote[]
+  onNoteClick?: (note: FacultyNote) => void
   onGroupCreated: (g: FacultyTopicGroup) => void
   onGroupUpdated: (g: FacultyTopicGroup) => void
   onGroupDeleted: (id: string) => void
@@ -101,6 +104,8 @@ export function TopicList({
   topics,
   deadlines,
   citationsByTopic,
+  notes = [],
+  onNoteClick,
   onGroupCreated,
   onGroupUpdated,
   onGroupDeleted,
@@ -338,9 +343,22 @@ export function TopicList({
 
   function renderCitationChips(topicId: string) {
     const citations = citationsByTopic.get(topicId) ?? []
-    if (citations.length === 0) return null
+    const associatedNotes = notes.filter((n) => n.topic_id === topicId)
+    if (citations.length === 0 && associatedNotes.length === 0) return null
     return (
       <div className="flex flex-wrap gap-1 mt-1">
+        {associatedNotes.map((n) => (
+          <button
+            key={`note-${n.id}`}
+            type="button"
+            onClick={() => onNoteClick?.(n)}
+            title={`Nota asociada: ${n.title}`}
+            className="flex items-center gap-1 h-5 rounded-full bg-blue-500/10 border border-blue-500/40 px-2 text-[10px] text-blue-400 hover:bg-blue-500/20 transition-colors cursor-pointer"
+          >
+            <FileText className="size-2.5 shrink-0" />
+            <span className="truncate max-w-[120px]">📝 {n.title}</span>
+          </button>
+        ))}
         {citations.map((c) => {
           const IconComp = CITATION_ICON[c.source_kind]
           return (
