@@ -1,14 +1,15 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Library, Link2, X } from 'lucide-react'
 import { toast } from 'sonner'
-import { listBooks, citationCountPerBook } from '@/lib/library/queries'
+import { listBooks, citationCountPerBook, setLastPageRead } from '@/lib/library/queries'
 import { listTopicCitationsForBook } from '@/lib/faculty/queries'
 import type { TopicCitationBacklink } from '@/lib/faculty/queries'
 import { BookGrid } from '@/components/library/book-grid'
 import { BookUploadDialog } from '@/components/library/book-upload-dialog'
 import { BookEditDialog } from '@/components/library/book-edit-dialog'
 import { PdfViewer } from '@/components/library/pdf-viewer'
+import { ProgressSection } from '@/components/library/progress-section'
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet'
@@ -28,6 +29,8 @@ function LibraryPage() {
   const [editing, setEditing] = useState<LibraryBook | null>(null)
   const [viewing, setViewing] = useState<LibraryBook | null>(null)
   const [topicCitations, setTopicCitations] = useState<TopicCitationBacklink[]>([])
+  const pageSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastSavedPageRef = useRef<Map<string, number>>(new Map())
 
   useEffect(() => {
     load()
@@ -73,6 +76,21 @@ function LibraryPage() {
     setViewing(book)
   }
 
+  function handlePageChange(bookId: string, page: number) {
+    const book = books.find((b) => b.id === bookId)
+    if (!book || book.progress_mode !== 'auto') return
+    if (lastSavedPageRef.current.get(bookId) === page) return
+    if (pageSaveTimer.current) clearTimeout(pageSaveTimer.current)
+    pageSaveTimer.current = setTimeout(() => {
+      lastSavedPageRef.current.set(bookId, page)
+      setLastPageRead(bookId, page)
+        .then(() => {
+          setBooks((prev) => prev.map((b) => (b.id === bookId ? { ...b, last_page_read: page } : b)))
+        })
+        .catch(() => {})
+    }, 1200)
+  }
+
   if (loading) {
     return (
       <div className="flex flex-col gap-6 p-6 lg:p-8">
@@ -89,18 +107,42 @@ function LibraryPage() {
   return (
     <div className="flex flex-col gap-6 p-6 lg:p-8">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center justify-center size-9 rounded-lg bg-secondary/60">
-          <Library className="size-4 text-muted-foreground" />
+      <div className="flex items-end gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center size-11 rounded-xl bg-primary/10 ring-1 ring-primary/20">
+            <Library className="size-5 text-primary" />
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Personal</p>
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Biblioteca</h1>
+          </div>
         </div>
-        <div>
-          <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Personal</p>
-          <h1 className="text-xl font-medium tracking-tight">Biblioteca</h1>
-        </div>
-        <div className="ml-auto text-[11px] text-muted-foreground/60 tabular-nums">
-          {books.length} {books.length === 1 ? 'libro' : 'libros'}
-        </div>
+        {books.length > 0 && (
+          <div className="ml-auto flex items-center gap-4 text-[11px] tabular-nums">
+            <LibraryStat label="Libros" value={String(books.length)} />
+            <LibraryStat
+              label="Leyendo"
+              value={String(books.filter((b) => {
+                const p = b.last_page_read; const t = b.page_count
+                return p != null && t != null && p > 0 && p < t
+              }).length)}
+            />
+            <LibraryStat
+              label="Terminados"
+              value={String(books.filter((b) => {
+                const p = b.last_page_read; const t = b.page_count
+                return p != null && t != null && p >= t
+              }).length)}
+            />
+          </div>
+        )}
       </div>
+
+      <ProgressSection
+        books={books}
+        onUpdated={(b) => setBooks((prev) => prev.map((x) => (x.id === b.id ? b : x)))}
+        onOpen={handleOpen}
+      />
 
       <BookGrid
         books={books}
@@ -109,6 +151,7 @@ function LibraryPage() {
         onEdit={setEditing}
         onDeleted={handleDeleted}
         onOpen={handleOpen}
+        onUpdated={(b) => setBooks((prev) => prev.map((x) => (x.id === b.id ? b : x)))}
       />
 
       <BookUploadDialog
@@ -170,12 +213,23 @@ function LibraryPage() {
             {viewing && (
               <PdfViewer
                 storagePath={viewing.storage_path}
+                initialPage={viewing.last_page_read ?? 1}
+                onPageChange={(p) => handlePageChange(viewing.id, p)}
                 className="h-full"
               />
             )}
           </div>
         </SheetContent>
       </Sheet>
+    </div>
+  )
+}
+
+function LibraryStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col items-end">
+      <span className="text-lg font-semibold text-foreground tabular-nums leading-none">{value}</span>
+      <span className="text-[9px] uppercase tracking-[0.16em] text-muted-foreground/70 mt-0.5">{label}</span>
     </div>
   )
 }

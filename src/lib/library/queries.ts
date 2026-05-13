@@ -63,7 +63,7 @@ export async function createBook(payload: BookPayload): Promise<LibraryBook> {
 
 export async function updateBook(
   id: string,
-  payload: Partial<Pick<LibraryBook, 'title' | 'author' | 'tags' | 'module_tags' | 'page_count' | 'cover_path'>>
+  payload: Partial<Pick<LibraryBook, 'title' | 'author' | 'tags' | 'module_tags' | 'page_count' | 'cover_path' | 'last_page_read' | 'progress_mode'>>
 ): Promise<LibraryBook> {
   const { data, error } = await supabase
     .from('library_books')
@@ -73,6 +73,22 @@ export async function updateBook(
     .single()
   if (error) throw error
   return data as LibraryBook
+}
+
+export async function setLastPageRead(id: string, page: number): Promise<void> {
+  const { error } = await supabase
+    .from('library_books')
+    .update({ last_page_read: page })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function setProgressMode(id: string, mode: 'auto' | 'manual'): Promise<void> {
+  const { error } = await supabase
+    .from('library_books')
+    .update({ progress_mode: mode })
+    .eq('id', id)
+  if (error) throw error
 }
 
 export async function deleteBook(id: string): Promise<void> {

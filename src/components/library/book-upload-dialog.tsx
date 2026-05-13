@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Upload, FileText, Loader2, X } from 'lucide-react'
+import { Upload, FileText, Loader2, X, FileImage, Sparkles, ImagePlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import {
@@ -25,14 +25,20 @@ interface Props {
   onCreated: (book: LibraryBook) => void
 }
 
+type CoverMode = 'auto' | 'manual'
+
 export function BookUploadDialog({ open, onOpenChange, onCreated }: Props) {
   'use no memo'
   const inputRef = useRef<HTMLInputElement>(null)
+  const coverInputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [processing, setProcessing] = useState(false)
   const [pageCount, setPageCount] = useState<number | null>(null)
-  const [coverBlob, setCoverBlob] = useState<Blob | null>(null)
-  const [coverPreview, setCoverPreview] = useState<string | null>(null)
+  const [coverMode, setCoverMode] = useState<CoverMode>('auto')
+  const [autoCoverBlob, setAutoCoverBlob] = useState<Blob | null>(null)
+  const [autoCoverPreview, setAutoCoverPreview] = useState<string | null>(null)
+  const [manualCoverBlob, setManualCoverBlob] = useState<Blob | null>(null)
+  const [manualCoverPreview, setManualCoverPreview] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [author, setAuthor] = useState('')
   const [tags, setTags] = useState('')
@@ -43,9 +49,13 @@ export function BookUploadDialog({ open, onOpenChange, onCreated }: Props) {
     setFile(null)
     setProcessing(false)
     setPageCount(null)
-    setCoverBlob(null)
-    if (coverPreview) URL.revokeObjectURL(coverPreview)
-    setCoverPreview(null)
+    setCoverMode('auto')
+    setAutoCoverBlob(null)
+    if (autoCoverPreview) URL.revokeObjectURL(autoCoverPreview)
+    setAutoCoverPreview(null)
+    setManualCoverBlob(null)
+    if (manualCoverPreview) URL.revokeObjectURL(manualCoverPreview)
+    setManualCoverPreview(null)
     setTitle('')
     setAuthor('')
     setTags('')
@@ -69,13 +79,24 @@ export function BookUploadDialog({ open, onOpenChange, onCreated }: Props) {
         generatePdfCover(f),
       ])
       setPageCount(count)
-      setCoverBlob(blob)
-      setCoverPreview(URL.createObjectURL(blob))
+      setAutoCoverBlob(blob)
+      setAutoCoverPreview(URL.createObjectURL(blob))
     } catch {
       toast.error('No se pudo procesar el PDF')
     } finally {
       setProcessing(false)
     }
+  }
+
+  function handleCoverFile(f: File) {
+    if (!f.type.startsWith('image/')) {
+      toast.error('Solo imágenes (JPG, PNG, WEBP)')
+      return
+    }
+    if (manualCoverPreview) URL.revokeObjectURL(manualCoverPreview)
+    setManualCoverBlob(f)
+    setManualCoverPreview(URL.createObjectURL(f))
+    setCoverMode('manual')
   }
 
   function toggleModuleTag(tag: LibraryModuleTag) {
@@ -95,17 +116,30 @@ export function BookUploadDialog({ open, onOpenChange, onCreated }: Props) {
 
       const id = crypto.randomUUID()
       const pdfPath = `${uid}/library/${id}.pdf`
-      const coverPath = `${uid}/library/${id}_cover.jpg`
+
+      const chosenBlob =
+        coverMode === 'manual' && manualCoverBlob ? manualCoverBlob
+        : coverMode === 'auto' && autoCoverBlob ? autoCoverBlob
+        : null
+      const ext = chosenBlob instanceof File
+        ? (chosenBlob.name.split('.').pop()?.toLowerCase() ?? 'jpg')
+        : 'jpg'
+      const coverContentType =
+        chosenBlob instanceof File && chosenBlob.type
+          ? chosenBlob.type
+          : 'image/jpeg'
+      const coverPath = `${uid}/library/${id}_cover.${ext}`
 
       const { error: pdfErr } = await supabase.storage
         .from('media')
         .upload(pdfPath, file, { contentType: 'application/pdf' })
       if (pdfErr) throw pdfErr
 
-      if (coverBlob) {
-        await supabase.storage
+      if (chosenBlob) {
+        const { error: coverErr } = await supabase.storage
           .from('media')
-          .upload(coverPath, coverBlob, { contentType: 'image/jpeg' })
+          .upload(coverPath, chosenBlob, { contentType: coverContentType })
+        if (coverErr) throw coverErr
       }
 
       const book = await createBook({
@@ -113,7 +147,7 @@ export function BookUploadDialog({ open, onOpenChange, onCreated }: Props) {
         author: author.trim() || null,
         storage_path: pdfPath,
         page_count: pageCount,
-        cover_path: coverBlob ? coverPath : null,
+        cover_path: chosenBlob ? coverPath : null,
         tags: tags ? tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
         module_tags: moduleTags,
       })
@@ -131,12 +165,12 @@ export function BookUploadDialog({ open, onOpenChange, onCreated }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Agregar libro</DialogTitle>
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-hidden grid-rows-[auto_minmax(0,1fr)]">
+        <DialogHeader className="min-w-0">
+          <DialogTitle className="truncate">Agregar libro</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 min-w-0 overflow-y-auto pr-1">
           {/* Drop zone */}
           {!file ? (
             <div
@@ -152,17 +186,9 @@ export function BookUploadDialog({ open, onOpenChange, onCreated }: Props) {
             </div>
           ) : (
             <div className="flex items-start gap-3 rounded-lg border border-border/70 bg-card/40 p-3">
-              {processing ? (
-                <div className="size-16 shrink-0 rounded bg-secondary flex items-center justify-center">
-                  <Loader2 className="size-5 text-muted-foreground animate-spin" />
-                </div>
-              ) : coverPreview ? (
-                <img src={coverPreview} alt="cover" className="size-16 shrink-0 rounded object-cover" />
-              ) : (
-                <div className="size-16 shrink-0 rounded bg-secondary flex items-center justify-center">
-                  <FileText className="size-5 text-muted-foreground" />
-                </div>
-              )}
+              <div className="size-12 shrink-0 rounded bg-secondary flex items-center justify-center">
+                <FileText className="size-5 text-muted-foreground" />
+              </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
                 <p className="text-xs text-muted-foreground">
@@ -179,6 +205,73 @@ export function BookUploadDialog({ open, onOpenChange, onCreated }: Props) {
 
           {file && (
             <>
+              {/* Cover selector */}
+              <div className="space-y-1.5">
+                <Label>Portada</Label>
+                <div className="grid grid-cols-[100px_1fr] gap-3">
+                  {/* Preview */}
+                  <div className="aspect-[2/3] rounded-md overflow-hidden bg-secondary/40 ring-1 ring-border/60 flex items-center justify-center">
+                    {processing && coverMode === 'auto' ? (
+                      <Loader2 className="size-5 text-muted-foreground animate-spin" />
+                    ) : coverMode === 'manual' && manualCoverPreview ? (
+                      <img src={manualCoverPreview} alt="cover" className="w-full h-full object-cover" />
+                    ) : coverMode === 'auto' && autoCoverPreview ? (
+                      <img src={autoCoverPreview} alt="cover" className="w-full h-full object-cover" />
+                    ) : (
+                      <FileImage className="size-6 text-muted-foreground/40" />
+                    )}
+                  </div>
+
+                  {/* Mode buttons */}
+                  <div className="flex flex-col gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setCoverMode('auto')}
+                      disabled={!autoCoverBlob}
+                      className={cn(
+                        'flex items-start gap-2 px-3 py-2 rounded-md border text-xs text-left transition-colors',
+                        coverMode === 'auto'
+                          ? 'bg-primary/10 border-primary/40 text-foreground'
+                          : 'border-border/60 text-muted-foreground hover:text-foreground hover:bg-secondary/40',
+                        !autoCoverBlob && 'opacity-50 cursor-not-allowed',
+                      )}
+                    >
+                      <Sparkles className="size-3.5 mt-0.5 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-medium">Primera página del PDF</p>
+                        <p className="text-[10px] text-muted-foreground/80">Generada automáticamente</p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => coverInputRef.current?.click()}
+                      className={cn(
+                        'flex items-start gap-2 px-3 py-2 rounded-md border text-xs text-left transition-colors',
+                        coverMode === 'manual' && manualCoverBlob
+                          ? 'bg-primary/10 border-primary/40 text-foreground'
+                          : 'border-border/60 text-muted-foreground hover:text-foreground hover:bg-secondary/40',
+                      )}
+                    >
+                      <ImagePlus className="size-3.5 mt-0.5 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-medium">
+                          {manualCoverBlob ? 'Cambiar imagen…' : 'Subir imagen…'}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground/80">JPG / PNG / WEBP</p>
+                      </div>
+                    </button>
+                    <input
+                      ref={coverInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) handleCoverFile(f) }}
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-1.5">
                 <Label>Título</Label>
                 <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nombre del libro" required />

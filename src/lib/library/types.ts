@@ -1,5 +1,7 @@
 export type LibraryModuleTag = 'faculty' | 'devlab' | 'english'
 
+export type LibraryProgressMode = 'auto' | 'manual'
+
 export type LibraryBook = {
   id: string
   user_id: string
@@ -8,6 +10,8 @@ export type LibraryBook = {
   storage_path: string
   page_count: number | null
   cover_path: string | null
+  last_page_read: number | null
+  progress_mode: LibraryProgressMode
   tags: string[]
   module_tags: LibraryModuleTag[]
   created_at: string
