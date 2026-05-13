@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
-import { Plus, Pencil, Trash2, CheckSquare, Square, FileText, Star } from 'lucide-react'
+import { Plus, Pencil, Trash2, CheckSquare, Square, FileText, Star, CalendarClock, AlertCircle, Clock, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -32,7 +32,16 @@ const KIND_BADGE: Record<FacultyDeadlineKind, string> = {
   entrega: 'bg-blue-500/10 text-blue-600 border-blue-200 dark:border-blue-800',
 }
 
-type Group = { label: string; items: FacultyDeadline[] }
+type GroupTone = 'destructive' | 'orange' | 'yellow' | 'muted' | 'green'
+type Group = { label: string; items: FacultyDeadline[]; tone: GroupTone; icon: React.ElementType }
+
+const GROUP_STYLE: Record<GroupTone, { dot: string; text: string; border: string; bg: string }> = {
+  destructive: { dot: 'bg-destructive', text: 'text-destructive', border: 'border-destructive/30', bg: 'bg-destructive/[0.04]' },
+  orange:      { dot: 'bg-orange-500', text: 'text-orange-500', border: 'border-orange-500/30', bg: 'bg-orange-500/[0.04]' },
+  yellow:      { dot: 'bg-yellow-500', text: 'text-yellow-600', border: 'border-yellow-500/30', bg: 'bg-yellow-500/[0.04]' },
+  muted:       { dot: 'bg-muted-foreground/40', text: 'text-muted-foreground', border: 'border-border/60', bg: 'bg-card/20' },
+  green:       { dot: 'bg-green-500', text: 'text-green-600', border: 'border-green-500/20', bg: 'bg-green-500/[0.03]' },
+}
 
 function groupDeadlines(deadlines: FacultyDeadline[]): Group[] {
   const now = new Date()
@@ -58,12 +67,12 @@ function groupDeadlines(deadlines: FacultyDeadline[]): Group[] {
   }
 
   const groups: Group[] = []
-  if (vencido.length) groups.push({ label: 'Vencido', items: vencido })
-  if (hoy.length) groups.push({ label: 'Hoy', items: hoy })
-  if (semana.length) groups.push({ label: 'Esta semana', items: semana })
-  if (mes.length) groups.push({ label: 'Este mes', items: mes })
-  if (despues.length) groups.push({ label: 'Después', items: despues })
-  if (hechos.length) groups.push({ label: 'Completados', items: hechos })
+  if (vencido.length) groups.push({ label: 'Vencido', items: vencido, tone: 'destructive', icon: AlertCircle })
+  if (hoy.length) groups.push({ label: 'Hoy', items: hoy, tone: 'orange', icon: Clock })
+  if (semana.length) groups.push({ label: 'Esta semana', items: semana, tone: 'yellow', icon: CalendarClock })
+  if (mes.length) groups.push({ label: 'Este mes', items: mes, tone: 'muted', icon: CalendarClock })
+  if (despues.length) groups.push({ label: 'Después', items: despues, tone: 'muted', icon: CalendarClock })
+  if (hechos.length) groups.push({ label: 'Completados', items: hechos, tone: 'green', icon: CheckCircle2 })
   return groups
 }
 
@@ -177,44 +186,73 @@ export function DeadlineList({
 
   const isPastDue = (d: FacultyDeadline) => new Date(d.due_at) < new Date()
 
+  const totalDone = deadlines.filter((d) => d.done).length
+  const totalPending = deadlines.filter((d) => !d.done).length
+  const overallPct = deadlines.length > 0 ? Math.round((totalDone / deadlines.length) * 100) : 0
+
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-foreground">
-          Deadlines
-          <span className="ml-2 text-[11px] text-muted-foreground tabular-nums">
-            ({deadlines.filter((d) => !d.done).length} pendientes)
-          </span>
-        </p>
-        <Button size="sm" className="gap-1.5" onClick={openCreate}>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="space-y-1.5 min-w-0">
+          <p className="text-sm font-medium text-foreground">
+            Deadlines
+            <span className="ml-2 text-[11px] text-muted-foreground tabular-nums">
+              {totalPending} pend. · {totalDone} hechos
+            </span>
+          </p>
+          {deadlines.length > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="h-1 w-40 rounded-full bg-secondary overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-green-500 transition-all duration-500"
+                  style={{ width: `${overallPct}%` }}
+                />
+              </div>
+              <span className="text-[10px] text-muted-foreground tabular-nums">{overallPct}%</span>
+            </div>
+          )}
+        </div>
+        <Button size="sm" className="gap-1.5 shrink-0" onClick={openCreate}>
           <Plus className="size-3.5" />
           Nuevo deadline
         </Button>
       </div>
 
       {groups.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center rounded-lg border border-dashed border-border">
+        <div className="flex flex-col items-center justify-center py-16 text-center rounded-xl border border-dashed border-border/70">
+          <CalendarClock className="size-8 text-muted-foreground/30 mb-3" />
           <p className="text-sm text-muted-foreground">Sin deadlines todavía.</p>
-          <Button size="sm" variant="outline" className="mt-3" onClick={openCreate}>
+          <Button size="sm" variant="outline" className="mt-4" onClick={openCreate}>
             Crear primer deadline
           </Button>
         </div>
       ) : (
         <div className="space-y-6">
-          {groups.map((group) => (
+          {groups.map((group) => {
+            const gStyle = GROUP_STYLE[group.tone]
+            const GIcon = group.icon
+            return (
             <div key={group.label}>
-              <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-2">
-                {group.label}
-              </p>
+              <div className={cn('flex items-center gap-2 mb-2.5 pb-1.5 border-b', gStyle.border)}>
+                <GIcon className={cn('size-3.5', gStyle.text)} />
+                <p className={cn('text-[10px] uppercase tracking-[0.18em] font-semibold', gStyle.text)}>
+                  {group.label}
+                </p>
+                <span className="ml-1 text-[10px] text-muted-foreground/60 tabular-nums">
+                  {group.items.length}
+                </span>
+              </div>
               <ul className="space-y-1.5">
                 {group.items.map((d) => (
                   <li
                     key={d.id}
                     className={cn(
-                      'group flex items-start gap-3 rounded-md border border-border/70 bg-card/40 p-3 transition-all',
-                      d.done && 'opacity-70',
+                      'group relative flex items-start gap-3 rounded-lg border border-border/60 bg-card/30 p-3 transition-all overflow-hidden',
+                      'hover:border-border hover:bg-card/60',
+                      d.done && 'opacity-60',
                     )}
                   >
+                    <span className={cn('absolute left-0 top-0 bottom-0 w-0.5', gStyle.dot)} aria-hidden />
                     {/* Toggle done */}
                     <button
                       type="button"
@@ -325,7 +363,8 @@ export function DeadlineList({
                 ))}
               </ul>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 

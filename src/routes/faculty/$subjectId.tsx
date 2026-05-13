@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import React, { useEffect, useState, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { Bookmark, ExternalLink, X, ArrowLeft } from 'lucide-react'
+import { Bookmark, ExternalLink, X, ArrowLeft, FileText, CalendarClock, ListTree, Star, Sparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { PdfViewer } from '@/components/library/pdf-viewer'
 import { PdfPanelContext } from '@/lib/faculty/pdf-panel-context'
@@ -475,43 +475,43 @@ function SubjectDetail() {
       subtitle={
         [subject.code, subject.semester, subject.professor].filter(Boolean).join(' · ') || undefined
       }
+      accentColor={subject.color}
     >
       <div className="grid gap-8 lg:grid-cols-[1fr_220px]">
         <section>
-          {/* Tabs */}
-          <div className="flex gap-0 border-b border-border mb-6">
-            {(['notas', 'deadlines', 'temario', 'calificaciones', 'quiz'] as const).map((tab) => {
-              const label =
-                tab === 'notas' ? 'Notas' :
-                tab === 'deadlines' ? 'Deadlines' :
-                tab === 'temario' ? 'Temario' :
-                tab === 'calificaciones' ? 'Calificaciones' : 'Quiz'
+          {/* Tabs — segmented pill with icons */}
+          <div className="relative inline-flex items-center gap-0.5 p-1 mb-6 rounded-lg border border-border/60 bg-card/40 backdrop-blur-sm overflow-x-auto max-w-full">
+            {([
+              { value: 'notas', label: 'Notas', icon: FileText, count: notes.length, accent: 'bg-primary' },
+              { value: 'deadlines', label: 'Deadlines', icon: CalendarClock, count: pendingDeadlines, accent: 'bg-orange-500' },
+              { value: 'temario', label: 'Temario', icon: ListTree, count: topics.length, accent: 'bg-secondary text-muted-foreground' },
+              { value: 'calificaciones', label: 'Calificaciones', icon: Star, count: deadlines.filter((d) => d.grade != null).length, accent: 'bg-secondary text-muted-foreground' },
+              { value: 'quiz', label: 'Quiz', icon: Sparkles, count: 0, accent: 'bg-secondary text-muted-foreground' },
+            ] as const).map((tab) => {
+              const Icon = tab.icon
+              const active = activeTab === tab.value
               return (
                 <button
-                  key={tab}
+                  key={tab.value}
                   type="button"
-                  onClick={() => setActiveTab(tab)}
+                  onClick={() => setActiveTab(tab.value)}
                   className={cn(
-                    'relative px-4 py-2.5 text-sm whitespace-nowrap transition-colors capitalize',
-                    activeTab === tab
-                      ? 'text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-primary after:rounded-t'
-                      : 'text-muted-foreground hover:text-foreground',
+                    'relative flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all',
+                    active
+                      ? 'bg-primary/10 text-primary shadow-sm ring-1 ring-primary/20'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary/40',
                   )}
                 >
-                  {label}
-                  {tab === 'deadlines' && pendingDeadlines > 0 && (
-                    <span className="ml-1.5 inline-flex items-center justify-center size-4 rounded-full bg-primary text-primary-foreground text-[9px] font-medium">
-                      {pendingDeadlines}
-                    </span>
-                  )}
-                  {tab === 'temario' && topics.length > 0 && (
-                    <span className="ml-1.5 inline-flex items-center justify-center size-4 rounded-full bg-secondary text-muted-foreground text-[9px] font-medium">
-                      {topics.length}
-                    </span>
-                  )}
-                  {tab === 'calificaciones' && deadlines.filter((d) => d.grade != null).length > 0 && (
-                    <span className="ml-1.5 inline-flex items-center justify-center size-4 rounded-full bg-secondary text-muted-foreground text-[9px] font-medium">
-                      {deadlines.filter((d) => d.grade != null).length}
+                  <Icon className={cn('size-3.5', active ? 'text-primary' : 'text-muted-foreground/70')} />
+                  {tab.label}
+                  {tab.count > 0 && (
+                    <span className={cn(
+                      'ml-0.5 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[9px] font-semibold tabular-nums',
+                      active
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-secondary text-muted-foreground',
+                    )}>
+                      {tab.count}
                     </span>
                   )}
                 </button>

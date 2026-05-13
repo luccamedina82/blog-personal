@@ -8,12 +8,22 @@ type Props = {
   subtitle?: string
   back?: { to: string; label?: string }
   actions?: ReactNode
+  accentColor?: string | null
 }
 
-export function FacultyShell({ children, title, subtitle, back, actions }: Props) {
+export function FacultyShell({ children, title, subtitle, back, actions, accentColor }: Props) {
   return (
-    <div className="flex flex-col min-h-full">
-      <div className="px-6 lg:px-12 pt-10">
+    <div className="relative flex flex-col min-h-full">
+      {accentColor && (
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 h-48 opacity-[0.07]"
+          style={{
+            background: `radial-gradient(ellipse 60% 100% at 30% 0%, ${accentColor}, transparent 70%)`,
+          }}
+          aria-hidden
+        />
+      )}
+      <div className="relative px-6 lg:px-12 pt-10">
         {back && (
           <Link
             to={back.to}
@@ -27,10 +37,19 @@ export function FacultyShell({ children, title, subtitle, back, actions }: Props
           Module · Faculty
         </p>
         <div className="flex items-start justify-between gap-6 flex-wrap">
-          <div>
-            <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-balance">
-              {title ?? 'Materias'}
-            </h1>
+          <div className="min-w-0">
+            <div className="flex items-center gap-3">
+              {accentColor && (
+                <span
+                  className="size-3 rounded-full shrink-0 ring-2 ring-background"
+                  style={{ backgroundColor: accentColor, boxShadow: `0 0 16px ${accentColor}80` }}
+                  aria-hidden
+                />
+              )}
+              <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-balance">
+                {title ?? 'Materias'}
+              </h1>
+            </div>
             {subtitle && (
               <p className="text-sm text-muted-foreground mt-2 max-w-2xl">{subtitle}</p>
             )}
@@ -39,7 +58,7 @@ export function FacultyShell({ children, title, subtitle, back, actions }: Props
         </div>
       </div>
 
-      <div className="flex-1 px-6 lg:px-12 py-8">{children}</div>
+      <div className="relative flex-1 px-6 lg:px-12 py-8">{children}</div>
     </div>
   )
 }

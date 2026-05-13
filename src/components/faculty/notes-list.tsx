@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Pencil, Trash2, CalendarDays, Star } from 'lucide-react'
+import { Plus, Pencil, Trash2, CalendarDays, Star, FileText, Link2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -29,6 +29,15 @@ const KIND_BADGE: Record<FacultyNoteKind, string> = {
   parcial: 'bg-red-500/10 text-red-600 border-red-200 dark:border-red-800',
   final: 'bg-rose-500/10 text-rose-700 border-rose-200 dark:border-rose-800',
   resumen: 'bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:border-emerald-800',
+}
+
+const KIND_ACCENT: Record<FacultyNoteKind, string> = {
+  clase: 'bg-blue-500',
+  apunte: 'bg-violet-500',
+  tp: 'bg-orange-500',
+  parcial: 'bg-red-500',
+  final: 'bg-rose-500',
+  resumen: 'bg-emerald-500',
 }
 
 type FilterValue = FacultyNoteKind | 'all' | 'vinculadas'
@@ -101,33 +110,51 @@ export function NotesList({ notes, onNew, onSelect, onEdit, onDeleted, linkedToD
       </div>
 
       {visible.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center rounded-lg border border-dashed border-border">
+        <div className="flex flex-col items-center justify-center py-16 text-center rounded-xl border border-dashed border-border/70">
+          <FileText className="size-8 text-muted-foreground/30 mb-3" />
           <p className="text-sm text-muted-foreground">
             {filter === 'all' ? 'Sin notas todavía.' : `Sin notas de tipo "${filter}".`}
           </p>
           {filter === 'all' && (
-            <Button size="sm" variant="outline" className="mt-3" onClick={onNew}>
+            <Button size="sm" variant="outline" className="mt-4" onClick={onNew}>
               Crear primera nota
             </Button>
           )}
         </div>
       ) : (
-        <ul className="divide-y divide-border/50">
-          {visible.map((note) => (
+        <ul className="space-y-2">
+          {visible.map((note) => {
+            const isLinked = linkedToDeadlineIds?.has(note.id) ?? false
+            return (
             <li key={note.id} className="group relative">
               <button
                 type="button"
                 onClick={() => onSelect(note)}
-                className="w-full flex flex-col sm:flex-row sm:items-start gap-3 py-4 text-left hover:bg-secondary/20 -mx-3 px-3 rounded-md transition-colors"
+                className={cn(
+                  'w-full flex items-stretch gap-3 rounded-lg border border-border/60 bg-card/30 text-left',
+                  'hover:bg-card/70 hover:border-border transition-all overflow-hidden',
+                )}
               >
-                <div className="flex-1 min-w-0">
+                {/* Accent strip */}
+                <span className={cn('w-1 shrink-0', KIND_ACCENT[note.kind])} aria-hidden />
+
+                <div className="flex-1 min-w-0 px-4 py-3.5">
                   <div className="flex items-center gap-2 flex-wrap mb-1.5">
                     <Badge
                       variant="outline"
-                      className={cn('text-[10px] uppercase tracking-wide', KIND_BADGE[note.kind])}
+                      className={cn('text-[10px] uppercase tracking-wide font-medium', KIND_BADGE[note.kind])}
                     >
                       {note.kind}
                     </Badge>
+                    {isLinked && (
+                      <Badge
+                        variant="outline"
+                        className="text-[9px] uppercase tracking-wide font-medium bg-primary/5 text-primary/80 border-primary/20 gap-1"
+                      >
+                        <Link2 className="size-2.5" />
+                        Vinculada
+                      </Badge>
+                    )}
                     {note.tags.slice(0, 3).map((t) => (
                       <Badge
                         key={t}
@@ -153,7 +180,10 @@ export function NotesList({ notes, onNew, onSelect, onEdit, onDeleted, linkedToD
                       </span>
                     )}
                     {note.grade != null && (
-                      <span className="flex items-center gap-1">
+                      <span className={cn(
+                        'flex items-center gap-1 font-medium tabular-nums',
+                        note.grade >= 7 ? 'text-green-500' : note.grade >= 4 ? 'text-yellow-500' : 'text-red-500',
+                      )}>
                         <Star className="size-3" />
                         {note.grade}
                       </span>
@@ -163,7 +193,7 @@ export function NotesList({ notes, onNew, onSelect, onEdit, onDeleted, linkedToD
               </button>
 
               <div
-                className="absolute top-4 right-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute top-2.5 right-2.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
                 onClick={(e) => e.stopPropagation()}
               >
                 <button
@@ -200,7 +230,8 @@ export function NotesList({ notes, onNew, onSelect, onEdit, onDeleted, linkedToD
                 </AlertDialog>
               </div>
             </li>
-          ))}
+            )
+          })}
         </ul>
       )}
     </div>
