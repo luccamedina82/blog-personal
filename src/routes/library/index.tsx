@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
-import { Library, Link2, X } from 'lucide-react'
+import { Library, Link2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { listBooks, citationCountPerBook, setLastPageRead } from '@/lib/library/queries'
 import { listTopicCitationsForBook } from '@/lib/faculty/queries'
@@ -13,7 +13,6 @@ import { ProgressSection } from '@/components/library/progress-section'
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet'
-import { Button } from '@/components/ui/button'
 import type { LibraryBook } from '@/lib/library/types'
 
 export const Route = createFileRoute('/library/')({
@@ -171,22 +170,14 @@ function LibraryPage() {
 
       <Sheet open={!!viewing} onOpenChange={(v) => { if (!v) setViewing(null) }}>
         <SheetContent side="right" className="w-full sm:max-w-2xl p-0 flex flex-col">
-          <SheetHeader className="px-4 pt-4 pb-0 shrink-0">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <SheetTitle className="text-base font-medium truncate">
-                  {viewing?.title}
-                </SheetTitle>
-                {viewing?.author && (
-                  <p className="text-xs text-muted-foreground mt-0.5">{viewing.author}</p>
-                )}
-              </div>
-              <Button
-                variant="ghost" size="icon" className="size-7 shrink-0"
-                onClick={() => setViewing(null)}
-              >
-                <X className="size-4" />
-              </Button>
+          <SheetHeader className="px-4 pt-4 pb-0 pr-12 shrink-0">
+            <div className="min-w-0">
+              <SheetTitle className="text-base font-medium truncate">
+                {viewing?.title}
+              </SheetTitle>
+              {viewing?.author && (
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">{viewing.author}</p>
+              )}
             </div>
           </SheetHeader>
           {topicCitations.length > 0 && (

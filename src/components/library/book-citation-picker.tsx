@@ -57,13 +57,13 @@ export function BookCitationPicker({ open, onOpenChange, onPick, onBrowse }: Pro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Citar libro</DialogTitle>
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-hidden grid-rows-[auto_minmax(0,1fr)]">
+        <DialogHeader className="min-w-0">
+          <DialogTitle className="truncate">Citar libro</DialogTitle>
         </DialogHeader>
 
         {!selected ? (
-          <div className="space-y-3">
+          <div className="space-y-3 min-w-0 overflow-y-auto pr-1">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
               <Input
@@ -118,8 +118,8 @@ export function BookCitationPicker({ open, onOpenChange, onPick, onBrowse }: Pro
             )}
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2.5 rounded-md border border-border/60 p-3">
+          <div className="space-y-4 min-w-0 overflow-y-auto pr-1">
+            <div className="flex items-center gap-2.5 rounded-md border border-border/60 p-3 min-w-0">
               {selected.cover_path ? (
                 <BookCover coverPath={selected.cover_path} title={selected.title} />
               ) : (
@@ -128,9 +128,9 @@ export function BookCitationPicker({ open, onOpenChange, onPick, onBrowse }: Pro
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium truncate">{selected.title}</p>
+                <p className="text-xs font-medium truncate" title={selected.title}>{selected.title}</p>
                 {selected.author && (
-                  <p className="text-[11px] text-muted-foreground">{selected.author}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{selected.author}</p>
                 )}
               </div>
               <button
