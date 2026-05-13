@@ -8,6 +8,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { SaveToAnkiButton } from '@/components/english/anki/save-to-anki-button'
 import type { VocabEntry } from '@/lib/english/types'
 
@@ -15,9 +16,20 @@ interface VocabTableProps {
   entries: VocabEntry[]
   onEdit: (entry: VocabEntry) => void
   onDelete: (id: string) => void
+  selectedIds?: Set<string>
+  onToggleSelect?: (id: string) => void
+  onSelectAll?: (visibleIds: string[], allSelected: boolean) => void
 }
 
-export function VocabTable({ entries, onEdit, onDelete }: VocabTableProps) {
+export function VocabTable({
+  entries,
+  onEdit,
+  onDelete,
+  selectedIds,
+  onToggleSelect,
+  onSelectAll,
+}: VocabTableProps) {
+  'use no memo'
   const [query, setQuery] = useState('')
 
   const filtered = query.trim()
@@ -31,6 +43,21 @@ export function VocabTable({ entries, onEdit, onDelete }: VocabTableProps) {
         )
       })
     : entries
+
+  const selectionEnabled = !!(selectedIds && onToggleSelect)
+  const gridCols = selectionEnabled
+    ? 'grid-cols-[auto_1fr_1fr_1.4fr_auto]'
+    : 'grid-cols-[1fr_1fr_1.4fr_auto]'
+
+  const visibleIds = filtered.map((e) => e.id)
+  const allSelected =
+    selectionEnabled &&
+    visibleIds.length > 0 &&
+    visibleIds.every((id) => selectedIds!.has(id))
+  const someSelected =
+    selectionEnabled &&
+    !allSelected &&
+    visibleIds.some((id) => selectedIds!.has(id))
 
   return (
     <div className="space-y-3">
@@ -50,7 +77,16 @@ export function VocabTable({ entries, onEdit, onDelete }: VocabTableProps) {
         </p>
       ) : (
         <div className="rounded-lg border border-border/70 overflow-hidden bg-card/40">
-          <div className="grid grid-cols-[1fr_1fr_1.4fr_auto] text-[10px] uppercase tracking-[0.18em] text-muted-foreground bg-background/40 border-b border-border/70">
+          <div className={`grid ${gridCols} text-[10px] uppercase tracking-[0.18em] text-muted-foreground bg-background/40 border-b border-border/70`}>
+            {selectionEnabled && (
+              <div className="px-3 py-2.5 flex items-center">
+                <Checkbox
+                  checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+                  onCheckedChange={() => onSelectAll?.(visibleIds, allSelected)}
+                  aria-label="Select all visible"
+                />
+              </div>
+            )}
             <div className="px-4 py-2.5">Term</div>
             <div className="px-4 py-2.5">Meaning</div>
             <div className="px-4 py-2.5">Example / Tags</div>
@@ -60,8 +96,17 @@ export function VocabTable({ entries, onEdit, onDelete }: VocabTableProps) {
             {filtered.map((entry) => (
               <li
                 key={entry.id}
-                className="grid grid-cols-[1fr_1fr_1.4fr_auto] text-[13px] hover:bg-card/60 transition-colors"
+                className={`grid ${gridCols} text-[13px] hover:bg-card/60 transition-colors`}
               >
+                {selectionEnabled && (
+                  <div className="px-3 py-3 flex items-center self-center">
+                    <Checkbox
+                      checked={selectedIds!.has(entry.id)}
+                      onCheckedChange={() => onToggleSelect!(entry.id)}
+                      aria-label={`Select ${entry.term}`}
+                    />
+                  </div>
+                )}
                 <div className="px-4 py-3 font-mono text-foreground self-center">
                   {entry.term}
                 </div>

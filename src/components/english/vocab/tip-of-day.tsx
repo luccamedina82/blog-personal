@@ -43,7 +43,7 @@ export function TipOfDay({ knownTerms }: Props) {
         await generateTip()
       }
     } catch {
-      toast.error('Error al cargar tip')
+      toast.error('Failed to load tip')
     } finally {
       setLoading(false)
     }
@@ -69,7 +69,7 @@ export function TipOfDay({ knownTerms }: Props) {
       setTip(stored)
       loadHistory()
     } catch {
-      toast.error('Error al generar tip')
+      toast.error('Failed to generate tip')
     }
   }
 
@@ -86,7 +86,7 @@ export function TipOfDay({ knownTerms }: Props) {
     return (
       <div className="rounded-lg border border-primary/20 bg-primary/5 p-5 flex items-center gap-3">
         <Loader2 className="size-4 animate-spin text-primary/60" />
-        <span className="text-sm text-muted-foreground">Generando tip del día…</span>
+        <span className="text-sm text-muted-foreground">Generating tip of the day…</span>
       </div>
     )
   }
@@ -103,7 +103,7 @@ export function TipOfDay({ knownTerms }: Props) {
             Tip of the day
           </p>
           <span className="text-[10px] text-muted-foreground/50">
-            {new Date(tip.tip_date + 'T00:00:00').toLocaleDateString('es-AR', {
+            {new Date(tip.tip_date + 'T00:00:00').toLocaleDateString('en-US', {
               day: 'numeric',
               month: 'short',
             })}
@@ -145,7 +145,7 @@ export function TipOfDay({ knownTerms }: Props) {
             <ChevronDown
               className={cn('size-3.5 transition-transform', showHistory && 'rotate-180')}
             />
-            Historial ({pastTips.length})
+            History ({pastTips.length})
           </button>
 
           {showHistory && (
@@ -156,7 +156,7 @@ export function TipOfDay({ knownTerms }: Props) {
                   className="flex items-center gap-3 px-3 py-2 hover:bg-muted/30 transition-colors"
                 >
                   <span className="text-[10px] text-muted-foreground/50 shrink-0 tabular-nums w-16">
-                    {new Date(h.tip_date + 'T00:00:00').toLocaleDateString('es-AR', {
+                    {new Date(h.tip_date + 'T00:00:00').toLocaleDateString('en-US', {
                       day: 'numeric',
                       month: 'short',
                     })}

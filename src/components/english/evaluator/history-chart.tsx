@@ -154,9 +154,9 @@ export function HistoryChart({ runs, onClear, onRunUpdate }: HistoryChartProps) 
               <div className="space-y-2">
                 {(
                   [
-                    { id: 'delete-all', label: 'Eliminar todos los registros' },
-                    { id: 'delete-recent', label: 'Eliminar los últimos N registros' },
-                    { id: 'keep-recent', label: 'Conservar solo los últimos N' },
+                    { id: 'delete-all', label: 'Delete all records' },
+                    { id: 'delete-recent', label: 'Delete the last N records' },
+                    { id: 'keep-recent', label: 'Keep only the last N' },
                   ] satisfies { id: ClearMode; label: string }[]
                 ).map((m) => (
                   <label
@@ -179,7 +179,7 @@ export function HistoryChart({ runs, onClear, onRunUpdate }: HistoryChartProps) 
               {clearMode !== 'delete-all' && (
                 <div className="space-y-1.5">
                   <label className="text-[11px] text-muted-foreground uppercase tracking-wide">
-                    Cantidad de registros (N)
+                    Number of records (N)
                   </label>
                   <input
                     type="number"
@@ -192,8 +192,8 @@ export function HistoryChart({ runs, onClear, onRunUpdate }: HistoryChartProps) 
                   {isNInvalid() && totalCount !== null && (
                     <p className="text-[11px] text-destructive">
                       {clearMode === 'delete-recent'
-                        ? `Solo hay ${totalCount} registro${totalCount !== 1 ? 's' : ''}. N debe ser ≤ ${totalCount}.`
-                        : `N debe ser menor que ${totalCount} para eliminar algo.`}
+                        ? `Only ${totalCount} record${totalCount !== 1 ? 's' : ''} available. N must be ≤ ${totalCount}.`
+                        : `N must be less than ${totalCount} to delete anything.`}
                     </p>
                   )}
                 </div>
@@ -206,16 +206,16 @@ export function HistoryChart({ runs, onClear, onRunUpdate }: HistoryChartProps) 
                   : 'bg-secondary/40 border border-border/50 text-muted-foreground',
               )}>
                 {totalCount === null ? (
-                  <span className="flex items-center gap-2"><Loader2 className="size-3 animate-spin" />Calculando…</span>
+                  <span className="flex items-center gap-2"><Loader2 className="size-3 animate-spin" />Calculating…</span>
                 ) : deleteCount() === 0 ? (
-                  'No hay registros para eliminar.'
+                  'No records to delete.'
                 ) : (
                   <>
-                    Se eliminarán{' '}
+                    Will delete{' '}
                     <strong>{deleteCount()}</strong>{' '}
-                    registro{deleteCount() !== 1 ? 's' : ''} de{' '}
+                    record{deleteCount() !== 1 ? 's' : ''} of{' '}
                     <strong>{totalCount}</strong>.
-                    {' '}Esta acción no se puede deshacer.
+                    {' '}This action cannot be undone.
                   </>
                 )}
               </div>
@@ -223,7 +223,7 @@ export function HistoryChart({ runs, onClear, onRunUpdate }: HistoryChartProps) 
 
             <DialogFooter>
               <Button variant="outline" size="sm" onClick={() => setClearOpen(false)} disabled={clearing}>
-                Cancelar
+                Cancel
               </Button>
               <Button
                 variant="destructive"
@@ -232,7 +232,7 @@ export function HistoryChart({ runs, onClear, onRunUpdate }: HistoryChartProps) 
                 onClick={handleConfirmClear}
               >
                 {clearing && <Loader2 className="size-3 animate-spin" />}
-                Eliminar {deleteCount() > 0 ? deleteCount() : ''} registro{deleteCount() !== 1 ? 's' : ''}
+                Delete {deleteCount() > 0 ? deleteCount() : ''} record{deleteCount() !== 1 ? 's' : ''}
               </Button>
             </DialogFooter>
           </DialogContent>

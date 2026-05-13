@@ -1,8 +1,6 @@
-import { createFileRoute, redirect } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
+import { EnglishDashboard } from '@/components/english/dashboard'
 
 export const Route = createFileRoute('/english/')({
-  beforeLoad: () => {
-    throw redirect({ to: '/english/evaluator', replace: true })
-  },
-  component: () => null,
+  component: EnglishDashboard,
 })

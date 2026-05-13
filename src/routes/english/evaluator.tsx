@@ -58,7 +58,7 @@ function EvaluatorPage() {
         <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground mb-1">Tooling</p>
         <h2 className="text-xl font-medium tracking-tight">Evaluator agent</h2>
         <p className="mt-1.5 text-sm text-muted-foreground max-w-2xl">
-          Paste a paragraph — or pick a post from Bitácora or DevLab — and get a six-axis English profile.
+          Paste a paragraph — or pick a post from Journal or DevLab — and get a six-axis English profile.
           Every run is saved automatically.
         </p>
       </div>

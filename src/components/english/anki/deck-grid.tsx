@@ -112,12 +112,12 @@ export function DeckGrid({ decks, onSelect, onCreated, onDeleted }: DeckGridProp
             <BookOpen className="size-6 text-muted-foreground/60" />
           </span>
           <div>
-            <h3 className="text-base font-medium">Sin decks</h3>
-            <p className="mt-1 text-sm text-muted-foreground">Creá uno para empezar.</p>
+            <h3 className="text-base font-medium">No decks</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Create one to get started.</p>
           </div>
           <Button size="sm" className="gap-1.5 mt-2" onClick={() => setCreateOpen(true)}>
             <Plus className="size-3.5" />
-            Nuevo deck
+            New deck
           </Button>
         </div>
       ) : (
@@ -183,7 +183,7 @@ export function DeckGrid({ decks, onSelect, onCreated, onDeleted }: DeckGridProp
                       {deck.description}
                     </p>
                   ) : (
-                    <p className="mt-1 text-xs text-muted-foreground/50 italic">Sin descripción</p>
+                    <p className="mt-1 text-xs text-muted-foreground/50 italic">No description</p>
                   )}
                 </div>
 

@@ -960,6 +960,216 @@ Al accept:
 
 ---
 
+## 3f — English UX overhaul (Arcade)
+
+**Objetivo:** convertir `/english` en una sección tipo "arcade de juegos para aprender inglés". Hoy abruma porque cada subruta abre sin contexto, hay headers duplicados (eyebrow + H1 page + H2 sub), idiomas mezclados (ES/EN) y `/english/` redirige al evaluator (modo más "serio" como primera impresión). Plan se ejecuta en fases incrementales — cada una mergeable.
+
+### Decisiones
+
+| Item | Decisión |
+|------|----------|
+| Idioma UI | **EN único** en toda la sección English (era mixto ES/EN). Inputs/textareas siguen pidiendo EN al usuario. |
+| Landing `/english/` | Dashboard real en vez de redirect a evaluator |
+| Mode cards | 5 cards: Daily · Evaluator · Vocab · Shadowing · Books con icono + descripción 1-línea + métrica viva |
+| Métricas vivas | Daily: streak + answered hoy · Evaluator: runs total + best score · Vocab: total entries + due Anki · Shadowing: total sessions + recent · Books: reading + count |
+| Tabs sub-rutas | Se mantienen tras navegación. `/english/` no muestra tabs (es landing) |
+| Header shell | Rebrand a "English Lab" + sub corto "Five practice modes" |
+| Streak/XP global | Diferido a fase posterior (requiere agregado de actividad cross-modo) |
+
+### Fase A — Unificar idioma a EN (sin schema)
+
+Archivos con strings ES (encontrados via grep `[áéíóúñ¿¡]|Cargando|Guardar|Eliminar|Generando|Revisando|Generar|Enviar|Otra|palabras|No se pudo`):
+
+```
+src/components/english/daily/daily-question-card.tsx
+src/components/english/daily/question-history.tsx
+src/components/english/anki/deck-grid.tsx
+src/components/english/anki/deck-view.tsx
+src/components/english/vocab/tip-of-day.tsx
+src/components/english/evaluator/history-chart.tsx
+src/components/english/evaluator/source-picker.tsx
+src/routes/english/daily.tsx
+src/routes/english/evaluator.tsx
+```
+
+Reemplazos clave:
+- "Practica con una pregunta nueva" → "Practice with a new question"
+- "Elegí un tono y la IA te genera…" → "Pick a tone and AI generates a question. Write your answer, get scores + corrections."
+- "Generando…" / "Revisando…" → "Generating…" / "Reviewing…"
+- "Nueva pregunta" → "New question"
+- "Otra" (reset) → "New one"
+- "palabras" → "words"
+- "Tono" → "Tone"
+- "No se pudo cargar el historial" → "Failed to load history"
+- "No se pudo generar pregunta" → "Failed to generate question"
+- "No se pudo revisar la respuesta" → "Failed to review answer"
+- "Respuesta guardada" / "Eliminada" → "Answer saved" / "Deleted"
+- "Cargando historial…" → "Loading history…"
+- "Aún no respondiste preguntas. Generá la primera arriba ↑" → "No answers yet. Generate your first question above ↑"
+- "Historial" → "History"
+- "hoy/ayer/hace Xd/sem" → "today/yesterday/Xd ago/Xw ago"
+- "sin respuesta" → "unanswered"
+- "¿Borrar pregunta?" + body + Cancelar/Borrar → "Delete question?" + "Also deletes the answer and review. Cannot be undone." + Cancel/Delete
+- `toLocaleDateString('es-AR', …)` → `'en-US'` en `question-history.tsx` y `tip-of-day.tsx`
+- "Generando tip del día…" → "Generating tip of the day…"
+- "Historial (N)" → "History (N)"
+- "Error al cargar tip" / "Error al generar tip" → "Failed to load tip" / "Failed to generate tip"
+- `history-chart.tsx` clear-dialog: "Eliminar todos los registros" / "Eliminar los últimos N" / "Conservar solo los últimos N" / "Cantidad de registros (N)" / "Solo hay N registros…" / "No hay registros…" / "Se eliminarán… Esta acción no se puede deshacer." / "Cancelar" / "Eliminar N registros" / "Calculando…" → todo a EN
+- `source-picker.tsx` "Bitácora" → "Journal" (label visible)
+- `deck-grid.tsx` empty state ES "Sin decks / Creá uno / Nuevo deck / Sin descripción" → EN
+- `deck-view.tsx`: revisar también
+
+### Fase B — Landing dashboard `/english/`
+
+**Cambios:**
+
+`src/routes/english/index.tsx` → reemplazar redirect con `EnglishDashboard` component.
+
+`src/components/english/english-shell.tsx`:
+- Detectar si `pathname === '/english' || pathname === '/english/'` → ocultar tabs, mostrar header simple. Si es sub-ruta, mostrar tabs como hoy.
+- Rebrand: eyebrow → `Module C · English Lab`. H1 → `Five practice modes for English.` (más cálido que "laboratory"). Subtítulo: `Daily drills, score profiles, vocab vault, shadowing studio, reading log.`
+
+`src/components/english/dashboard.tsx` (nuevo, ~180 líneas):
+- 5 cards en grid `grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4`
+- Cada card: icono lucide grande + nombre + 1-línea descripción + métrica viva tabular + chevron hover. Click → navega a la sub-ruta.
+- Mode meta (en const dentro del componente):
+  ```ts
+  const MODES = [
+    { id: 'daily', label: 'Daily Drill', icon: Sparkles, to: '/english/daily',
+      blurb: 'AI generates a question. You answer. Get scored.' },
+    { id: 'evaluator', label: 'Writing Lab', icon: LineChart, to: '/english/evaluator',
+      blurb: 'Paste a text or pick a post. Six-axis profile + corrections.' },
+    { id: 'vocab', label: 'Vocab Vault', icon: BookOpen, to: '/english/vocab',
+      blurb: 'Words, phrases, connectors. Tip of the day. Save to Anki.' },
+    { id: 'shadowing', label: 'Shadowing Studio', icon: Mic, to: '/english/shadowing',
+      blurb: 'Imitate an audio. Track quality. Repeat the weak ones.' },
+    { id: 'books', label: 'Reading Log', icon: Library, to: '/english/books',
+      blurb: 'Books, annotations, ratings.' },
+  ]
+  ```
+- Métricas:
+  - Daily: `dailyAnswered.length` (total con answer) + streak días respondidos.
+  - Evaluator: `runs.length` total + `best = max(overall)`.
+  - Vocab: `entries.length` + due Anki (`cards where due_at <= now` count, opcional v1).
+  - Shadowing: `sessions.length`.
+  - Books: `books.filter(b => b.status === 'reading').length` + total. Si schema no tiene `status`, omitir y mostrar solo total (ya existe `books.length`).
+- Cargar todas las métricas en paralelo con `Promise.all` en un `useEffect`. Loading state: skeleton por card.
+
+**Queries necesarias** — todas ya existen excepto contadores baratos:
+- `listDailyQuestions(limit?)` — usar `limit = 200` o sumar `countDailyAnswers()` nueva si crece (v1: filtrar client-side).
+- `listEvaluatorRuns()` — ya existe.
+- `listVocab()` — ya existe.
+- `listShadowingSessions()` — ya existe.
+- `listBooks()` — ya existe.
+- Streak helper: `computeStreak(answers: { created_at }[])` — fechas únicas (YYYY-MM-DD), días consecutivos hasta hoy.
+
+**Decisión carga:** una sola pasada en `dashboard.tsx`. Cada sub-ruta hace su propio fetch (no compartir state). Costo extra aceptable; dashboard solo se carga al entrar.
+
+### Fase C (diferida) — Streak/XP global + onboarding empty states
+
+- Sumar columna virtual `last_activity_at` por modo, mostrar fila resumen arriba del dashboard.
+- Reemplazar empty states pelados ("No books yet") por mini-tour con CTA + ejemplo.
+- Diferir: queremos confirmar que dashboard funciona antes de añadir capas.
+
+### Checklist Fase A
+
+- [x] Traducir 9 archivos (lista arriba) — todas las strings ES → EN, `Bitácora` UI label → `Journal` (type `'bitacora'` se mantiene)
+- [x] Cambiar `es-AR` → `en-US` en formateadores de fecha (`question-history.tsx`, `tip-of-day.tsx`, `deck-view.tsx`)
+- [x] Revisar toasts de error en `daily.tsx` / `evaluator.tsx`
+
+### Checklist Fase B
+
+- [x] `src/components/english/dashboard.tsx` (5 mode cards + métricas vivas + skeletons)
+- [x] `src/routes/english/index.tsx`: reemplazar redirect por `<EnglishDashboard />`
+- [x] `english-shell.tsx`: ocultar tabs en landing + sub muestra `←` back-link y tabs. Rebrand "Module C · English Lab" + H1 dinámico
+- [x] Helper `computeAnswerStreak` inline en `dashboard.tsx`
+- [x] Skeletons (`bg-muted/40 animate-pulse`) mientras cargan métricas
+
+### Polish post-B (siguiente quick win cerrado)
+
+- [x] Vocab: TipOfDay promovido a banner permanente (drop tab "Tip")
+- [x] Vocab: Tabs reemplazadas por filter chips (All / Words / Phrases / Connectors con counts)
+- [x] Vocab: CTA `Study decks` (link a `/study/decks`) en header
+- [x] `VocabForm` acepta `defaultKind` para preseleccionar kind según chip activo al crear
+
+---
+
+## 3g — Anki: bulk-create cards from Vocab Vault
+
+**Objetivo:** convertir el Vocab Vault en fuente directa de cards. Hoy existe `SaveToAnkiButton` por fila (1 click → 1 card). Falta: **selección múltiple + bulk insert al deck elegido**. Cierra el loop Vocab → Anki sin abrir N modales.
+
+### Decisiones
+
+| Item | Decisión |
+|------|----------|
+| Single-card save (existente) | Mantener `SaveToAnkiButton` por fila. No tocar. |
+| Bulk save | Checkbox por fila + sticky action bar abajo con count + deck Select + botón |
+| Front/Back mapping | `front = entry.term` · `back = entry.meaning + (example ? \n\n"example" : '')` (idéntico al single-row) |
+| Tags | Heredados de la entry (`entry.tags`) + auto-tag con `entry.kind` (`word`/`phrase`/`connector`) |
+| Source | `source_kind = 'vocab'` (nuevo valor en enum) · `source_ref = null` (no se referencia entrada por entrada para no acoplar deletes) |
+| Migración constraint | Sí — `0018_cards_source_kind_vocab.sql` agrega `'vocab'` al check constraint |
+| Duplicados | Permitir. User decide. Toast con count creado. |
+| Vista "Select all" | Sí — checkbox en header de tabla afecta solo entries del filter activo |
+
+### Schema — `supabase/migrations/0018_cards_source_kind_vocab.sql`
+
+```sql
+alter table cards
+  drop constraint if exists cards_source_kind_check;
+
+alter table cards
+  add constraint cards_source_kind_check
+    check (source_kind in ('evaluator','devlab','bitacora','book','faculty','vocab'));
+```
+
+### Tipos — extender `src/lib/english/types.ts`
+
+```ts
+// Card.source_kind union → agregar 'vocab'
+source_kind: 'evaluator' | 'devlab' | 'bitacora' | 'book' | 'faculty' | 'vocab' | null
+```
+
+### UI — `src/routes/english/vocab.tsx` + `vocab-table.tsx`
+
+**VocabTable cambios (props opcionales para no romper otros usos):**
+- Nueva col izquierda: checkbox por fila. Header tiene checkbox indeterminate "select all in current filter".
+- Props nuevas: `selectedIds: Set<string>`, `onToggleSelect(id)`, `onSelectAll(allOrNone: boolean)`. Si no se pasan, checkboxes no se renderizan (modo compat).
+
+**Vocab page cambios:**
+- State: `selectedIds: Set<string>`. Reset al cambiar `kindFilter`.
+- Sticky bar `bottom-0 left-0 right-0 z-30` con backdrop blur cuando `selectedIds.size > 0`:
+  - Texto: "N selected"
+  - `Select` deck (reuse `listDecks`)
+  - Botón "Add to deck" → `bulkInsertCards(deckId, mappedCards, 'vocab', null)` → toast + clear selection
+  - Botón "Clear" → vacía selection
+
+**Mapping cliente:**
+```ts
+const cards = entries
+  .filter((e) => selectedIds.has(e.id))
+  .map((e) => ({
+    front: e.term,
+    back: e.meaning + (e.example ? `\n\n"${e.example}"` : ''),
+    tags: [...e.tags, e.kind],
+  }))
+```
+
+### Queries
+
+`bulkInsertCards` ya existe (§12c). Reusar sin cambios. Necesita el nuevo enum value tras correr migración.
+
+### Checklist
+
+- [x] `supabase/migrations/0018_cards_source_kind_vocab.sql` — ⚠️ pendiente correr en Supabase
+- [x] `Card.source_kind` union extendida en `src/lib/english/types.ts` + `SOURCE_LABEL` en `deck-view.tsx`
+- [x] `VocabTable`: checkbox col + select-all (indeterminate state) + props opcionales `selectedIds`/`onToggleSelect`/`onSelectAll`
+- [x] `vocab.tsx`: selection state + sticky bottom bar + deck loader on-demand + bulk save via `bulkInsertCards(deckId, cards, 'vocab', null)`
+- [x] Reset `selectedIds` al cambiar `kindFilter` (vía `useEffect`)
+- [x] Toast con count de cards creadas + clear selection
+- [x] `tsc --noEmit` clean
+
+---
+
 ## 4 — Deuda técnica activa
 
 | Prioridad | Item | Acción |
@@ -977,6 +1187,7 @@ Al accept:
 | 🔴 Alta | `0012_quizzes.sql` | Correr en Supabase — habilita quizzes (12d) |
 | 🔴 Alta | `0014_daily_questions.sql` | Correr en Supabase — habilita English daily questions (§3d) |
 | 🔴 Alta | `0015_devlab_annotations.sql` | Correr en Supabase — habilita DevLab inline reviews (§3e) |
+| 🔴 Alta | `0018_cards_source_kind_vocab.sql` | Correr en Supabase — habilita `source_kind='vocab'` en cards (§3g) |
 | 🟡 Media | BYOK: API keys por usuario (Groq/Gemini) | Tabla `user_settings (user_id pk, groq_key, gemini_key)` + RLS. Settings page con form. Endpoints `api/ai/*` leen JWT → buscan key del user → fallback a env var. Permite que cada amigo use su free tier sin compartir cuota. ~1-2h. |
 | 🟢 Baja | Fase 9d Export PDF (`jspdf + html2canvas`) | No bloquea nada |
 | 🟢 Baja | Drag-and-drop bloques (`@dnd-kit`) | Nice-to-have, botones ▲▼ funcionan |

@@ -46,7 +46,7 @@ export function DailyQuestionCard({ recentQuestions, onCreated, onAnswered }: Pr
       setQuestion(saved)
       onCreated(saved)
     } catch {
-      toast.error('No se pudo generar pregunta')
+      toast.error('Failed to generate question')
     } finally {
       setGenerating(false)
     }
@@ -69,7 +69,7 @@ export function DailyQuestionCard({ recentQuestions, onCreated, onAnswered }: Pr
       console.log('[daily] review payload =', review)
     } catch (err) {
       console.error('[daily] review fetch error:', err)
-      toast.error('No se pudo revisar la respuesta')
+      toast.error('Failed to review answer')
       setSubmitting(false)
       return
     }
@@ -80,10 +80,10 @@ export function DailyQuestionCard({ recentQuestions, onCreated, onAnswered }: Pr
       const saved = await submitDailyAnswer(question.id, answer.trim(), review)
       console.log('[daily] insert ok, saved =', saved)
       onAnswered(question.id, saved)
-      toast.success('Respuesta guardada')
+      toast.success('Answer saved')
     } catch (err) {
       console.error('[daily] persist answer error:', err)
-      toast.error('Review generada pero no se pudo guardar')
+      toast.error('Review generated but failed to save')
     } finally {
       setSubmitting(false)
     }
@@ -100,20 +100,20 @@ export function DailyQuestionCard({ recentQuestions, onCreated, onAnswered }: Pr
       <div className="rounded-2xl border border-border/60 bg-gradient-to-br from-card to-card/40 p-6 shadow-sm space-y-5">
         <div>
           <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground mb-1">Daily</p>
-          <h2 className="text-xl font-semibold tracking-tight">Practica con una pregunta nueva</h2>
+          <h2 className="text-xl font-semibold tracking-tight">Practice with a new question</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Elegí un tono y la IA te genera una pregunta. Respondé en inglés y te devuelve scores + corrección.
+            Pick a tone and AI generates a question. Answer in English and get scores + corrections.
           </p>
         </div>
 
         <div className="space-y-2">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Tono</p>
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Tone</p>
           <ToneSelector value={tone} onChange={setTone} disabled={generating} />
         </div>
 
         <Button onClick={handleGenerate} disabled={generating} className="gap-1.5">
           {generating ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-          {generating ? 'Generando…' : 'Nueva pregunta'}
+          {generating ? 'Generating…' : 'New question'}
         </Button>
       </div>
     )
@@ -135,7 +135,7 @@ export function DailyQuestionCard({ recentQuestions, onCreated, onAnswered }: Pr
             className="gap-1.5 text-xs h-7"
           >
             <RotateCcw className="size-3" />
-            Otra
+            New one
           </Button>
         </div>
         <p className="text-lg font-medium leading-relaxed text-foreground">{question.question}</p>
@@ -154,7 +154,7 @@ export function DailyQuestionCard({ recentQuestions, onCreated, onAnswered }: Pr
           />
           <div className="flex items-center justify-between gap-2">
             <p className="text-[11px] text-muted-foreground tabular-nums">
-              {answer.trim().split(/\s+/).filter(Boolean).length} palabras
+              {answer.trim().split(/\s+/).filter(Boolean).length} words
             </p>
             <Button
               onClick={handleSubmit}
@@ -162,7 +162,7 @@ export function DailyQuestionCard({ recentQuestions, onCreated, onAnswered }: Pr
               className="gap-1.5"
             >
               {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
-              {submitting ? 'Revisando…' : 'Enviar respuesta'}
+              {submitting ? 'Reviewing…' : 'Submit answer'}
             </Button>
           </div>
         </div>

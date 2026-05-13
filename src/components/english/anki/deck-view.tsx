@@ -16,9 +16,10 @@ import type { Card, Deck } from '@/lib/english/types'
 const SOURCE_LABEL: Record<NonNullable<Card['source_kind']>, string> = {
   devlab: 'DevLab',
   faculty: 'Faculty',
-  bitacora: 'Bitácora',
+  bitacora: 'Journal',
   book: 'Book',
   evaluator: 'Evaluator',
+  vocab: 'Vocab',
 }
 
 interface DeckViewProps {
@@ -147,7 +148,7 @@ export function DeckView({ deck, onBack, onStudy, onCardCountChange }: DeckViewP
       {loading ? (
         <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
           <span className="size-1.5 rounded-full bg-muted-foreground/60 animate-pulse" />
-          Cargando cards…
+          Loading cards…
         </div>
       ) : cards.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center gap-3 rounded-2xl border border-dashed border-border/60">
@@ -155,8 +156,8 @@ export function DeckView({ deck, onBack, onStudy, onCardCountChange }: DeckViewP
             <Plus className="size-5 text-muted-foreground/60" />
           </span>
           <div>
-            <h3 className="text-sm font-medium">Sin cards</h3>
-            <p className="mt-1 text-xs text-muted-foreground">Añadí una para empezar.</p>
+            <h3 className="text-sm font-medium">No cards</h3>
+            <p className="mt-1 text-xs text-muted-foreground">Add one to get started.</p>
           </div>
         </div>
       ) : (
@@ -219,7 +220,7 @@ export function DeckView({ deck, onBack, onStudy, onCardCountChange }: DeckViewP
                         </span>
                       ) : (
                         <span className="text-[11px] text-muted-foreground">
-                          {new Date(card.due).toLocaleDateString('es-AR', { month: 'short', day: 'numeric' })}
+                          {new Date(card.due).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         </span>
                       )}
                     </div>

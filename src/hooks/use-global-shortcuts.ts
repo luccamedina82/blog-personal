@@ -13,6 +13,7 @@ const NAV_SEQUENCES: Record<string, string> = {
 const SEQUENCE_TIMEOUT = 1000
 
 export function useGlobalShortcuts() {
+  'use no memo'
   const navigate = useNavigate()
   const bufRef = useRef<string[]>([])
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)

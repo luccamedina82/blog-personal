@@ -24,7 +24,7 @@ function DailyPage() {
   useEffect(() => {
     listDailyQuestions(30)
       .then(setItems)
-      .catch(() => toast.error('No se pudo cargar el historial'))
+      .catch(() => toast.error('Failed to load history'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -40,9 +40,9 @@ function DailyPage() {
     try {
       await deleteDailyQuestion(id)
       setItems((prev) => prev.filter((i) => i.id !== id))
-      toast.success('Eliminada')
+      toast.success('Deleted')
     } catch {
-      toast.error('Error al borrar')
+      toast.error('Failed to delete')
     }
   }
 
@@ -57,7 +57,7 @@ function DailyPage() {
       />
 
       {loading ? (
-        <p className="text-xs text-muted-foreground">Cargando historial…</p>
+        <p className="text-xs text-muted-foreground">Loading history…</p>
       ) : (
         <QuestionHistory items={items} onDelete={handleDelete} />
       )}

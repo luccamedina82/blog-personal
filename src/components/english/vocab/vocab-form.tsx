@@ -31,14 +31,15 @@ interface VocabFormProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   initial?: VocabEntry
+  defaultKind?: VocabEntry['kind']
   onSubmit: (values: VocabPayload) => Promise<void>
 }
 
-export function VocabForm({ open, onOpenChange, initial, onSubmit }: VocabFormProps) {
+export function VocabForm({ open, onOpenChange, initial, defaultKind, onSubmit }: VocabFormProps) {
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      kind: 'word',
+      kind: defaultKind ?? 'word',
       term: '',
       meaning: '',
       example: '',
@@ -49,14 +50,14 @@ export function VocabForm({ open, onOpenChange, initial, onSubmit }: VocabFormPr
   useEffect(() => {
     if (open) {
       form.reset({
-        kind: initial?.kind ?? 'word',
+        kind: initial?.kind ?? defaultKind ?? 'word',
         term: initial?.term ?? '',
         meaning: initial?.meaning ?? '',
         example: initial?.example ?? '',
         tags: initial?.tags.join(', ') ?? '',
       })
     }
-  }, [open, initial?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, initial?.id, defaultKind]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSubmit(values: FormValues) {
     await onSubmit({

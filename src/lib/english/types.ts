@@ -18,7 +18,7 @@ export type Card = {
   interval_days: number
   due: string
   reviews: number
-  source_kind: 'evaluator' | 'devlab' | 'bitacora' | 'book' | 'faculty' | null
+  source_kind: 'evaluator' | 'devlab' | 'bitacora' | 'book' | 'faculty' | 'vocab' | null
   source_ref: string | null
   created_at: string
 }

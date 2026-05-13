@@ -14,7 +14,7 @@ interface SourcePickerProps {
 
 const MODES: { id: SourceMode; label: string }[] = [
   { id: 'paste', label: 'Paste' },
-  { id: 'bitacora', label: 'Bitácora' },
+  { id: 'bitacora', label: 'Journal' },
   { id: 'devlab', label: 'DevLab' },
 ]
 
@@ -90,7 +90,7 @@ export function SourcePicker({ mode, onModeChange, onTextLoad }: SourcePickerPro
               <option value="" disabled>
                 {mode === 'devlab'
                   ? devlabPosts.length === 0 ? 'No DevLab posts yet' : 'Select a post…'
-                  : journalPosts.length === 0 ? 'No Bitácora entries yet' : 'Select an entry…'}
+                  : journalPosts.length === 0 ? 'No Journal entries yet' : 'Select an entry…'}
               </option>
               {mode === 'devlab' &&
                 devlabPosts.map((p) => (

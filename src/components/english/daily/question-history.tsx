@@ -25,11 +25,11 @@ function relativeDate(iso: string): string {
   const d = new Date(iso)
   const diff = Date.now() - d.getTime()
   const days = Math.floor(diff / 86400000)
-  if (days === 0) return 'hoy'
-  if (days === 1) return 'ayer'
-  if (days < 7) return `hace ${days}d`
-  if (days < 30) return `hace ${Math.floor(days / 7)}sem`
-  return d.toLocaleDateString('es-AR', { month: 'short', day: 'numeric' })
+  if (days === 0) return 'today'
+  if (days === 1) return 'yesterday'
+  if (days < 7) return `${days}d ago`
+  if (days < 30) return `${Math.floor(days / 7)}w ago`
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 export function QuestionHistory({ items, onDelete }: Props) {
@@ -38,14 +38,14 @@ export function QuestionHistory({ items, onDelete }: Props) {
   if (items.length === 0) {
     return (
       <p className="text-sm text-muted-foreground text-center py-8">
-        Aún no respondiste preguntas. Generá la primera arriba ↑
+        No answers yet. Generate your first question above ↑
       </p>
     )
   }
 
   return (
     <div className="space-y-3">
-      <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Historial</p>
+      <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">History</p>
       <ul className="space-y-2">
         {items.map((item) => {
           const isExpanded = expandedId === item.id
@@ -88,7 +88,7 @@ export function QuestionHistory({ items, onDelete }: Props) {
                     )}
                     {!hasAnswer && (
                       <span className="ml-auto text-[10px] text-muted-foreground/60 italic">
-                        sin respuesta
+                        unanswered
                       </span>
                     )}
                   </div>
@@ -107,18 +107,18 @@ export function QuestionHistory({ items, onDelete }: Props) {
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>¿Borrar pregunta?</AlertDialogTitle>
+                      <AlertDialogTitle>Delete question?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Se borra también la respuesta y review. No se puede deshacer.
+                        Also deletes the answer and review. Cannot be undone.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
                       <AlertDialogAction
                         onClick={() => onDelete(item.id)}
                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                       >
-                        Borrar
+                        Delete
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -129,7 +129,7 @@ export function QuestionHistory({ items, onDelete }: Props) {
                 <div className="border-t border-border/40 p-4 space-y-4">
                   <div className="space-y-1.5">
                     <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-                      Tu respuesta
+                      Your answer
                     </p>
                     <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">
                       {item.answer.answer_text}
