@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Pencil, Trash2, CalendarDays, Star, FileText, Link2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, CalendarDays, Clock, Star, FileText, Link2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,16 @@ import {
 } from '@/components/ui/alert-dialog'
 import { deleteFacultyNote } from '@/lib/faculty/queries'
 import type { FacultyNote, FacultyNoteKind } from '@/lib/faculty/types'
+import type { DevLabBlock } from '@/lib/devlab/types'
+
+function readingTime(blocks: DevLabBlock[]): string {
+  const words = blocks.reduce((acc, b) => {
+    if (b.kind === 'text') return acc + b.html.replace(/<[^>]+>/g, ' ').split(/\s+/).filter(Boolean).length
+    if (b.kind === 'code') return acc + b.code.split('\n').length * 2
+    return acc + 20
+  }, 0)
+  return `${Math.max(1, Math.round(words / 200))} min`
+}
 
 const KIND_FILTERS: Array<{ value: FacultyNoteKind | 'all'; label: string }> = [
   { value: 'all', label: 'Todas' },
@@ -177,6 +187,20 @@ export function NotesList({ notes, onNew, onSelect, onEdit, onDeleted, linkedToD
                           month: 'short',
                           year: 'numeric',
                         })}
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1">
+                      <CalendarDays className="size-3" />
+                      {new Date(note.created_at).toLocaleDateString('es-AR', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </span>
+                    {note.blocks.length > 0 && (
+                      <span className="flex items-center gap-1">
+                        <Clock className="size-3" />
+                        {readingTime(note.blocks)} read
                       </span>
                     )}
                     {note.grade != null && (

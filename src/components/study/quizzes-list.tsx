@@ -1,10 +1,17 @@
 import { Link } from '@tanstack/react-router'
-import { ChevronRight, FileQuestion, GraduationCap, Play, Sparkles } from 'lucide-react'
+import { ChevronRight, FileQuestion, GraduationCap, Play, Sparkles, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import { Button } from '@/components/ui/button'
 import type { QuizWithSubject } from '@/lib/faculty/quizzes'
 
 interface Props {
   quizzes: QuizWithSubject[]
+  onDelete?: (id: string) => void
 }
 
 function relativeDate(iso: string): string {
@@ -19,7 +26,7 @@ function relativeDate(iso: string): string {
   return `hace ${Math.floor(days / 365)} años`
 }
 
-export function QuizzesList({ quizzes }: Props) {
+export function QuizzesList({ quizzes, onDelete }: Props) {
   if (quizzes.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
@@ -68,21 +75,54 @@ export function QuizzesList({ quizzes }: Props) {
               <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
                 <FileQuestion className="size-4 text-primary" />
               </span>
-              <span className="inline-flex items-center gap-1 h-6 px-2 rounded-full bg-secondary/60 border border-border/50 text-[10px] text-muted-foreground tabular-nums">
-                {q.questionCount} Q
-              </span>
+              {onDelete && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => e.preventDefault()}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>¿Eliminar "{q.title}"?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Se eliminan el quiz y sus {q.questionCount} preguntas permanentemente.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => onDelete(q.id)}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Eliminar
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
             </div>
 
             <div className="w-full flex-1">
               <p className="text-sm font-medium text-foreground line-clamp-2 leading-snug">
                 {q.title}
               </p>
-              {q.subject_name && (
-                <p className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <GraduationCap className="size-3 shrink-0" />
-                  <span className="truncate">{q.subject_name}</span>
-                </p>
-              )}
+              <div className="mt-1.5 flex items-center gap-2">
+                {q.subject_name && (
+                  <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <GraduationCap className="size-3 shrink-0" />
+                    <span className="truncate">{q.subject_name}</span>
+                  </p>
+                )}
+                <span className="inline-flex items-center h-4 px-1.5 rounded-full bg-secondary/60 border border-border/50 text-[10px] text-muted-foreground tabular-nums">
+                  {q.questionCount} Q
+                </span>
+              </div>
             </div>
 
             <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/40">
